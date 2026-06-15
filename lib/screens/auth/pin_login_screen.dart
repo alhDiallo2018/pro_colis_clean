@@ -50,40 +50,47 @@ class _PinLoginScreenState extends ConsumerState<PinLoginScreen> {
   }
 
   Future<void> _verifyPin() async {
+    if (_pin.length != 6) return;
+    
     setState(() => _isLoading = true);
     
-    // Connexion avec PIN (l'identifiant est récupéré automatiquement depuis le stockage)
-    final result = await ref.read(authProvider.notifier).loginWithPin(_pin);
+    // Appel du notifier
+    final result = await ref.read(authProvider.notifier).loginWithSavedPin(_pin);
     
-    if (mounted) {
-      setState(() => _isLoading = false);
-      
-      if (result['success'] == true) {
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
-            (route) => false,
-          );
-        }
-      } else {
-        setState(() => _showPinError = true);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    
+    if (result['success'] == true) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        (route) => false,
+      );
+    } else {
+      setState(() {
+        _showPinError = true;
         for (var i = 0; i < 6; i++) {
           _controllers[i].clear();
           _pinDigits[i] = '';
         }
+      });
+      if (_focusNodes.isNotEmpty) {
         _focusNodes[0].requestFocus();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
-        );
       }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'PIN incorrect'), 
+          backgroundColor: Colors.red
+        ),
+      );
     }
   }
 
   Future<void> _forgotPin() async {
-    // Récupérer l'identifiant sauvegardé
     final savedIdentifier = await ref.read(authProvider.notifier).getSavedIdentifier();
+    
+    if (!mounted) return;
     
     if (savedIdentifier == null || savedIdentifier.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,9 +105,10 @@ class _PinLoginScreenState extends ConsumerState<PinLoginScreen> {
       identifier: savedIdentifier,
     );
     
+    if (!mounted) return;
     setState(() => _isLoading = false);
     
-    if (result['success'] == true && mounted) {
+    if (result['success'] == true) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -108,13 +116,15 @@ class _PinLoginScreenState extends ConsumerState<PinLoginScreen> {
             userId: result['userId'],
             identifier: savedIdentifier,
             isLogin: true,
-            // isPinReset: true, // Pour indiquer que c'est une réinitialisation de PIN
           ),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'] ?? 'Erreur'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(result['message'] ?? 'Erreur'), 
+          backgroundColor: Colors.red
+        ),
       );
     }
   }
@@ -166,8 +176,12 @@ class _PinLoginScreenState extends ConsumerState<PinLoginScreen> {
             children: [
               CustomButton(
                 text: 'Se connecter',
-                onPressed: _pin.length == 6 ? _verifyPin : () {},
-                backgroundColor: const Color(0xFF0B6E3A),
+                // ✅ CORRECTION DU TYPE : Une fonction anonyme qui s'exécute ou ne fait rien si la condition n'est pas remplie
+                onPressed: () {
+                  if (_pin.length == 6) {
+                    _verifyPin();
+                  }
+                },
               ),
               const SizedBox(height: 16),
               TextButton(

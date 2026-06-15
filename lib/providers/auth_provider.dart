@@ -44,6 +44,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<String?> getSavedIdentifier() async {
     return await _storage.read(key: 'saved_identifier');
   }
+
+  Future<void> clearSavedIdentifier() async {
+    await _storage.delete(key: 'saved_identifier');
+    debugPrint('🗑️ [AUTH] Identifiant sauvegardé effacé');
+  }
   
   // ==================== CHARGEMENT INITIAL ====================
   
@@ -180,25 +185,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // Connexion avec PIN uniquement (utilise l'identifiant sauvegardé)
-  Future<Map<String, dynamic>> loginWithPin(String pin) async {
+  // ✅ Connexion avec PIN (utilise l'identifiant passé en paramètre)
+  Future<Map<String, dynamic>> loginWithPin(String pin, String identifier) async {
     state = AuthState.loading();
     try {
-      // Récupérer l'identifiant sauvegardé
-      final savedIdentifier = await _getSavedIdentifier();
+      debugPrint('🔐 [PIN_LOGIN] Tentative pour: $identifier');
       
-      if (savedIdentifier == null || savedIdentifier.isEmpty) {
-        debugPrint('❌ [PIN_LOGIN] Aucun identifiant sauvegardé');
-        state = AuthState.error('Session expirée. Veuillez vous reconnecter avec votre email.');
-        return {
-          'success': false, 
-          'message': 'Session expirée. Veuillez vous reconnecter avec votre email.'
-        };
-      }
+      // Sauvegarder l'identifiant pour les prochaines connexions
+      await _saveIdentifier(identifier);
       
-      debugPrint('🔐 [PIN_LOGIN] Tentative pour: $savedIdentifier');
-      
-      final result = await _apiService.loginWithPin(pin, savedIdentifier);
+      final result = await _apiService.loginWithPin(pin, identifier);
       
       if (result['success'] == true) {
         final user = User.fromJson(result['user']);
@@ -214,6 +210,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = AuthState.error(e.toString());
       return {'success': false, 'message': e.toString()};
     }
+  }
+
+  // ✅ Connexion avec PIN uniquement (utilise l'identifiant sauvegardé)
+  Future<Map<String, dynamic>> loginWithSavedPin(String pin) async {
+    final savedIdentifier = await _getSavedIdentifier();
+    
+    if (savedIdentifier == null || savedIdentifier.isEmpty) {
+      debugPrint('❌ [PIN_LOGIN] Aucun identifiant sauvegardé');
+      state = AuthState.error('Session expirée. Veuillez vous reconnecter.');
+      return {
+        'success': false,
+        'message': 'Session expirée. Veuillez vous reconnecter.'
+      };
+    }
+    
+    return loginWithPin(pin, savedIdentifier);
   }
 
   // ✅ CORRECTION ICI : Ne pas effacer l'identifiant lors de la déconnexion
@@ -332,4 +344,38 @@ class AuthState {
     isLoading: false,
     error: error,
   );
+  
+  // ✅ Getter pour vérifier si l'utilisateur est un client
+  bool get isClient => user?.role == UserRole.client;
+  
+  // ✅ Getter pour vérifier si l'utilisateur est un chauffeur
+  bool get isDriver => user?.role == UserRole.driver;
+  
+  // ✅ Getter pour vérifier si l'utilisateur est un admin
+  bool get isAdmin => user?.role == UserRole.admin;
+  
+  // ✅ Getter pour vérifier si l'utilisateur est super admin
+  bool get isSuperAdmin => user?.role == UserRole.superAdmin;
+  
+  // ✅ Getter pour le nom d'affichage
+  String get displayName => user?.fullName.split(' ').first ?? 'Utilisateur';
+  
+  // ✅ Copie avec nouvelles valeurs
+  AuthState copyWith({
+    bool? isLoading,
+    User? user,
+    String? userId,
+    String? error,
+    bool? isAuthenticated,
+    bool? isOtpSent,
+  }) {
+    return AuthState(
+      isLoading: isLoading ?? this.isLoading,
+      user: user ?? this.user,
+      userId: userId ?? this.userId,
+      error: error ?? this.error,
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      isOtpSent: isOtpSent ?? this.isOtpSent,
+    );
+  }
 }

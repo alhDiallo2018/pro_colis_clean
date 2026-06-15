@@ -117,6 +117,8 @@ class StatusTimeline extends StatelessWidget {
     switch (status) {
       case ParcelStatus.pending:
         return Icons.pending;
+      case ParcelStatus.free:
+        return Icons.gavel;  
       case ParcelStatus.confirmed:
         return Icons.check_circle;
       case ParcelStatus.pickedUp:

@@ -179,10 +179,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.white,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Changer la photo',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+            const Divider(),
             ListTile(
               leading: const Icon(Icons.photo_library, color: Color(0xFF0B6E3A)),
               title: const Text('Choisir dans la galerie'),
@@ -193,6 +202,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               title: const Text('Prendre une photo'),
               onTap: () { Navigator.pop(context); _takePhoto(); },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -385,8 +395,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 16,
-            height: 16,
+            width: 12,
+            height: 12,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: color,
@@ -414,26 +424,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final authState = ref.watch(authProvider);
     
     if (!_isInitialized || authState.user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: Color(0xFFF8F9FA),
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     
     _user = authState.user!;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: Text(_isEditing ? 'Modifier le profil' : 'Mon profil'),
-        backgroundColor: const Color(0xFF0B6E3A),
-        foregroundColor: Colors.white,
+        title: Text(
+          _isEditing ? 'Modifier le profil' : 'Mon profil',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1A2B3C),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           if (!_isEditing)
             IconButton(
-              icon: const Icon(Icons.edit),
+              icon: const Icon(Icons.edit, color: Color(0xFF0B6E3A)),
               onPressed: () => setState(() => _isEditing = true),
             ),
           if (_isEditing)
             TextButton(
               onPressed: _isLoading ? null : _updateProfile,
-              child: const Text('Enregistrer', style: TextStyle(color: Colors.white)),
+              child: const Text('Enregistrer', style: TextStyle(color: Color(0xFF0B6E3A), fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -447,33 +470,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _buildProfilePhotoSection(),
                   const SizedBox(height: 24),
                   
-                  const _SectionHeader(title: 'Informations personnelles', icon: Icons.person),
-                  const SizedBox(height: 12),
-                  _buildPersonalInfoSection(),
+                  _buildSectionCard(
+                    title: 'Informations personnelles',
+                    icon: Icons.person,
+                    color: Colors.blue,
+                    child: _buildPersonalInfoSection(),
+                  ),
+                  const SizedBox(height: 16),
                   
-                  const SizedBox(height: 24),
-                  const _SectionHeader(title: 'Sécurité', icon: Icons.lock),
-                  const SizedBox(height: 12),
-                  _buildPinSection(),
+                  _buildSectionCard(
+                    title: 'Sécurité',
+                    icon: Icons.lock,
+                    color: Colors.orange,
+                    child: _buildPinSection(),
+                  ),
                   
                   if (_user.role == UserRole.driver) ...[
-                    const SizedBox(height: 24),
-                    const _SectionHeader(title: 'Véhicule', icon: Icons.directions_car),
-                    const SizedBox(height: 12),
-                    _buildVehicleSection(),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: 'Véhicule',
+                      icon: Icons.directions_car,
+                      color: Colors.purple,
+                      child: _buildVehicleSection(),
+                    ),
                   ],
                   
                   if (_user.role == UserRole.admin) ...[
-                    const SizedBox(height: 24),
-                    const _SectionHeader(title: 'Point de service', icon: Icons.business),
-                    const SizedBox(height: 12),
-                    _buildGarageSection(),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: 'Point de service',
+                      icon: Icons.business,
+                      color: Colors.teal,
+                      child: _buildGarageSection(),
+                    ),
                   ],
                   
-                  const SizedBox(height: 24),
-                  const _SectionHeader(title: 'Statistiques', icon: Icons.analytics),
-                  const SizedBox(height: 12),
-                  _buildStatsSection(),
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    title: 'Statistiques',
+                    icon: Icons.analytics,
+                    color: Colors.green,
+                    child: _buildStatsSection(),
+                  ),
                   
                   const SizedBox(height: 24),
                   SizedBox(
@@ -485,11 +523,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           Navigator.pushReplacementNamed(context, '/login');
                         }
                       },
-                      icon: const Icon(Icons.logout, color: Colors.red),
+                      icon: const Icon(Icons.logout, color: Colors.red, size: 18),
                       label: const Text('Se déconnecter', style: TextStyle(color: Colors.red)),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -500,16 +539,80 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required Widget child,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(25),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 22, color: color),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A2B3C),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfilePhotoSection() {
     return Center(
       child: Column(
         children: [
           Stack(
             children: [
-              CircleAvatar(
-                radius: 60,
-                backgroundColor: const Color(0xFF0B6E3A).withAlpha(25),
-                child: _getProfileImageWidget(),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 65,
+                  backgroundColor: const Color(0xFF0B6E3A).withAlpha(25),
+                  child: _getProfileImageWidget(),
+                ),
               ),
               if (_isEditing)
                 Positioned(
@@ -524,7 +627,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: IconButton(
                       icon: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
                       onPressed: _showImageSourceDialog,
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
                       constraints: const BoxConstraints(),
                     ),
                   ),
@@ -533,11 +636,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           if (_isEditing)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: 12),
               child: TextButton.icon(
                 onPressed: _showImageSourceDialog,
-                icon: const Icon(Icons.camera_alt, size: 16),
-                label: const Text('Changer la photo'),
+                icon: const Icon(Icons.camera_alt, size: 16, color: Color(0xFF0B6E3A)),
+                label: const Text('Changer la photo', style: TextStyle(color: Color(0xFF0B6E3A))),
               ),
             ),
         ],
@@ -546,14 +649,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Widget _getProfileImageWidget() {
-    // Photo temporaire sélectionnée
     if (_profileImage != null) {
       if (kIsWeb) {
         return ClipOval(
           child: Image.network(
             _profileImage!.path,
-            width: 120,
-            height: 120,
+            width: 130,
+            height: 130,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => _buildInitialsAvatar(),
           ),
@@ -562,8 +664,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         return ClipOval(
           child: Image.file(
             File(_profileImage!.path),
-            width: 120,
-            height: 120,
+            width: 130,
+            height: 130,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => _buildInitialsAvatar(),
           ),
@@ -571,14 +673,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
     
-    // Photo existante
     if (_user.profilePhoto != null && _user.profilePhoto!.isNotEmpty) {
       final fullImageUrl = _getFullImageUrl(_user.profilePhoto);
       return ClipOval(
         child: Image.network(
           fullImageUrl,
-          width: 120,
-          height: 120,
+          width: 130,
+          height: 130,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             debugPrint('❌ Erreur chargement image: $error');
@@ -594,66 +695,66 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildInitialsAvatar() {
     return Text(
       _user.initials,
-      style: const TextStyle(fontSize: 50, color: Color(0xFF0B6E3A)),
+      style: const TextStyle(fontSize: 45, fontWeight: FontWeight.w500, color: Color(0xFF0B6E3A)),
     );
   }
 
   Widget _buildPersonalInfoSection() {
     return Column(
       children: [
-        _EditableField(
+        _buildModernField(
+          icon: Icons.person,
           label: 'Nom complet',
           value: _user.fullName,
           isEditing: _isEditing,
           controller: _fullNameController,
-          icon: Icons.person,
         ),
         const SizedBox(height: 12),
-        _EditableField(
+        _buildModernField(
+          icon: Icons.email,
           label: 'Email',
           value: _user.email,
           isEditing: _isEditing,
           controller: _emailController,
-          icon: Icons.email,
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 12),
-        _EditableField(
+        _buildModernField(
+          icon: Icons.phone,
           label: 'Téléphone',
           value: _user.phone,
           isEditing: _isEditing,
           controller: _phoneController,
-          icon: Icons.phone,
           keyboardType: TextInputType.phone,
         ),
         const SizedBox(height: 12),
-        _EditableField(
+        _buildModernField(
+          icon: Icons.location_on,
           label: 'Adresse',
           value: _user.address ?? 'Non renseigné',
           isEditing: _isEditing,
           controller: _addressController,
-          icon: Icons.location_on,
         ),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
-              child: _EditableField(
+              child: _buildModernField(
+                icon: Icons.location_city,
                 label: 'Ville',
                 value: _user.city ?? 'Non renseigné',
                 isEditing: _isEditing,
                 controller: _cityController,
-                icon: Icons.location_city,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _EditableField(
+              child: _buildModernField(
+                icon: Icons.map,
                 label: 'Région',
                 value: _user.region ?? 'Non renseigné',
                 isEditing: _isEditing,
                 controller: _regionController,
-                icon: Icons.map,
               ),
             ),
           ],
@@ -662,30 +763,76 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Widget _buildModernField({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool isEditing,
+    required TextEditingController controller,
+    TextInputType? keyboardType,
+  }) {
+    if (isEditing) {
+      return CustomTextField(
+        controller: controller,
+        label: label,
+        prefixIcon: icon,
+        keyboardType: keyboardType ?? TextInputType.text,
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B6E3A).withAlpha(15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: const Color(0xFF0B6E3A)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF1A2B3C)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVehicleSection() {
     return Column(
       children: [
-        // Plaque
-        _EditableField(
-          label: 'Plaque',
+        _buildModernField(
+          icon: Icons.local_taxi,
+          label: 'Plaque d\'immatriculation',
           value: _user.vehiclePlate ?? 'Non renseigné',
           isEditing: _isEditing,
           controller: _vehiclePlateController,
-          icon: Icons.local_taxi,
         ),
         const SizedBox(height: 12),
-        
-        // Modèle
-        _EditableField(
+        _buildModernField(
+          icon: Icons.directions_car,
           label: 'Modèle',
           value: _user.vehicleModel ?? 'Non renseigné',
           isEditing: _isEditing,
           controller: _vehicleModelController,
-          icon: Icons.directions_car,
         ),
         const SizedBox(height: 12),
-        
-        // Couleur - Mode édition vs visualisation
         if (_isEditing)
           CustomTextField(
             controller: _vehicleColorController,
@@ -701,7 +848,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             child: Row(
               children: [
-                Icon(Icons.color_lens, size: 20, color: Colors.grey.shade600),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B6E3A).withAlpha(15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.color_lens, size: 18, color: Color(0xFF0B6E3A)),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -717,14 +871,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         const SizedBox(height: 12),
-        
-        // Année
-        _EditableField(
+        _buildModernField(
+          icon: Icons.calendar_today,
           label: 'Année',
           value: _user.vehicleYear?.toString() ?? 'Non renseigné',
           isEditing: _isEditing,
           controller: _vehicleYearController,
-          icon: Icons.calendar_today,
           keyboardType: TextInputType.number,
         ),
       ],
@@ -735,199 +887,171 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final garageName = _user.garageName ?? 'Chargement...';
     final garageId = _user.garageId ?? 'Non assigné';
     
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.withAlpha(50)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0B6E3A).withAlpha(25),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.business, color: Color(0xFF0B6E3A), size: 24),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0B6E3A).withAlpha(15),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Point de service',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        garageName,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
+                child: const Icon(Icons.business, size: 22, color: Color(0xFF0B6E3A)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Point de service', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 2),
+                    Text(
+                      garageName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF1A2B3C)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'ID: $garageId',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _InfoRow(label: 'ID du point de service', value: garageId),
-          ],
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildPinSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.withAlpha(50)),
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF0B6E3A).withAlpha(25),
+            color: Colors.grey.shade50,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.pin, color: Color(0xFF0B6E3A)),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0B6E3A).withAlpha(15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.pin, size: 22, color: Color(0xFF0B6E3A)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Code PIN', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 2),
+                    Text(
+                      _showPinChangeForm ? 'Modification en cours...' : '●●●●●●',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF1A2B3C)),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(_showPinChangeForm ? Icons.close : Icons.edit, color: const Color(0xFF0B6E3A)),
+                onPressed: () => setState(() => _showPinChangeForm = !_showPinChangeForm),
+              ),
+            ],
+          ),
         ),
-        title: const Text('Code PIN'),
-        subtitle: Text(_showPinChangeForm ? 'Modification...' : '●●●●●●'),
-        trailing: IconButton(
-          icon: Icon(_showPinChangeForm ? Icons.close : Icons.edit),
-          onPressed: () => setState(() => _showPinChangeForm = !_showPinChangeForm),
-        ),
-      ),
+        if (_showPinChangeForm) ...[
+          const SizedBox(height: 12),
+          CustomTextField(
+            controller: _currentPinController,
+            label: 'PIN actuel',
+            prefixIcon: Icons.lock,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          CustomTextField(
+            controller: _newPinController,
+            label: 'Nouveau PIN (6 chiffres)',
+            prefixIcon: Icons.lock_outline,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          CustomTextField(
+            controller: _confirmPinController,
+            label: 'Confirmer le PIN',
+            prefixIcon: Icons.lock_outline,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: _isLoading ? null : _updatePin,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0B6E3A),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size(double.infinity, 44),
+            ),
+            child: const Text('Mettre à jour le PIN'),
+          ),
+        ],
+      ],
     );
   }
 
   Widget _buildStatsSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.withAlpha(50)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _InfoRow(label: 'Inscription', value: _formatDate(_user.createdAt)),
-            const Divider(),
-            _InfoRow(label: 'Dernière connexion', value: _formatDate(_user.lastLogin)),
-            const Divider(),
-            _InfoRow(label: 'Rôle', value: _user.role.label),
-            const Divider(),
-            _InfoRow(label: 'Statut', value: _user.isActive ? 'Actif' : 'Inactif'),
-            if (_user.isDriver) ...[
-              const Divider(),
-              _InfoRow(label: 'Statut chauffeur', value: _user.driverStatus?.label ?? 'En attente'),
-            ],
-          ],
-        ),
+    return Column(
+      children: [
+        _buildStatsRow('Inscription', _formatDate(_user.createdAt)),
+        const Divider(),
+        _buildStatsRow('Dernière connexion', _formatDate(_user.lastLogin)),
+        const Divider(),
+        _buildStatsRow('Rôle', _user.role.label),
+        const Divider(),
+        _buildStatsRow('Statut', _user.isActive ? 'Actif' : 'Inactif'),
+        if (_user.isDriver) ...[
+          const Divider(),
+          _buildStatsRow('Statut chauffeur', _user.driverStatus?.label ?? 'En attente'),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStatsRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A2B3C)),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Jamais';
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-// ==================== COMPOSANTS ====================
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  const _SectionHeader({required this.title, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(width: 4, height: 20, decoration: BoxDecoration(color: const Color(0xFF0B6E3A), borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 8),
-        Icon(icon, size: 18, color: const Color(0xFF0B6E3A)),
-        const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-}
-
-class _EditableField extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isEditing;
-  final TextEditingController controller;
-  final IconData icon;
-  final TextInputType? keyboardType;
-  
-  const _EditableField({
-    required this.label,
-    required this.value,
-    required this.isEditing,
-    required this.controller,
-    required this.icon,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isEditing) {
-      return CustomTextField(
-        controller: controller,
-        label: label,
-        prefixIcon: icon,
-        keyboardType: keyboardType ?? TextInputType.text,
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey.shade600),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 14)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(width: 130, child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13))),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-        ],
-      ),
-    );
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }

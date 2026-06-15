@@ -1,4 +1,4 @@
-// ignore_for_file: unused_field
+// ignore_for_file: file_names, unused_field, prefer_final_fields, prefer_const_constructors, prefer_const_literals_to_create_immutables
 
 import 'dart:io';
 
@@ -19,14 +19,14 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'parcel_detail_screen.dart';
 
-class NewParcelScreen extends ConsumerStatefulWidget {
-  const NewParcelScreen({super.key});
+class NewParcelScreenA extends ConsumerStatefulWidget {
+  const NewParcelScreenA({super.key});
 
   @override
-  ConsumerState<NewParcelScreen> createState() => _NewParcelScreenState();
+  ConsumerState<NewParcelScreenA> createState() => _NewParcelScreenState();
 }
 
-class _NewParcelScreenState extends ConsumerState<NewParcelScreen> {
+class _NewParcelScreenState extends ConsumerState<NewParcelScreenA> {
   final ApiService _apiService = ApiService();
   final _formKey = GlobalKey<FormState>();
   

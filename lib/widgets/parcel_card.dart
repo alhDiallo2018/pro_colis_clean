@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/parcel.dart';
 
 class ParcelCard extends StatelessWidget {
@@ -15,6 +16,8 @@ class ParcelCard extends StatelessWidget {
     switch (status) {
       case ParcelStatus.pending:
         return Colors.orange;
+      case ParcelStatus.free:
+        return Colors.purple;
       case ParcelStatus.confirmed:
         return Colors.blue;
       case ParcelStatus.pickedUp:

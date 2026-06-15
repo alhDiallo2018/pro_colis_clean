@@ -1,3 +1,6 @@
+// ignore_for_file: unused_import, unused_element
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/screens/parcel/parcel_detail_screen.dart';
@@ -15,27 +18,41 @@ class TrackParcelScreen extends ConsumerStatefulWidget {
 }
 
 class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
-  final _trackingController = TextEditingController();
+  final TextEditingController _trackingController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isSearching = false;
   Parcel? _trackedParcel;
   List<String> _recentSearches = [];
+  String? _currentlyPlayingAudioUrl;
 
   @override
   void initState() {
     super.initState();
     _loadRecentSearches();
+    _setupAudioListeners();
   }
 
   @override
   void dispose() {
     _trackingController.dispose();
     _focusNode.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
+  void _setupAudioListeners() {
+    _audioPlayer.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() {
+          _currentlyPlayingAudioUrl = null;
+        });
+      }
+    });
+  }
+
   void _loadRecentSearches() {
-    // Charger les recherches récentes depuis SharedPreferences ou Hive
+    // Charger les recherches récentes depuis SharedPreferences
     // Pour l'instant, on utilise une liste en mémoire
     _recentSearches = [
       'COL-20260526-ADE4B8',
@@ -48,20 +65,17 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
   List<String> _generateSuggestions(String query) {
     final suggestions = <String>{};
 
-    // Suggestions basées sur le format COL-YYYYMMDD-XXXXXX
     if (query.startsWith('COL') || query.startsWith('col')) {
       suggestions.add('COL-${_getCurrentDate()}-XXXXXX');
       suggestions.add('COL-${_getYesterdayDate()}-XXXXXX');
     }
 
-    // Suggestions basées sur les recherches récentes
     for (var search in _recentSearches) {
-      if (search.toUpperCase().contains(query)) {
+      if (search.toUpperCase().contains(query.toUpperCase())) {
         suggestions.add(search);
       }
     }
 
-    // Suggestions basées sur le format de numéro
     if (query.length >= 4 && query.length <= 8) {
       suggestions.add('COL-${_getCurrentDate()}-$query');
       suggestions.add('COL-${_getYesterdayDate()}-$query');
@@ -104,9 +118,7 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
       });
 
       if (parcel != null) {
-        // Sauvegarder la recherche
         _saveToRecentSearches(trackingNumberToUse);
-        // Fermer le clavier
         _focusNode.unfocus();
 
         if (mounted) {
@@ -160,7 +172,6 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
     });
   }
 
-  // Vérifier si une étape est complétée
   bool _isStepCompleted(Parcel parcel, String stepStatus) {
     final statusOrder = [
       'pending',
@@ -183,17 +194,9 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
       {'status': 'pending', 'label': 'Création', 'icon': Icons.create},
       {'status': 'confirmed', 'label': 'Confirmé', 'icon': Icons.check_circle},
       {'status': 'picked_up', 'label': 'Ramassé', 'icon': Icons.local_shipping},
-      {
-        'status': 'in_transit',
-        'label': 'En transit',
-        'icon': Icons.transfer_within_a_station
-      },
+      {'status': 'in_transit', 'label': 'En transit', 'icon': Icons.transfer_within_a_station},
       {'status': 'arrived', 'label': 'Arrivé', 'icon': Icons.location_on},
-      {
-        'status': 'out_for_delivery',
-        'label': 'En livraison',
-        'icon': Icons.delivery_dining
-      },
+      {'status': 'out_for_delivery', 'label': 'En livraison', 'icon': Icons.delivery_dining},
       {'status': 'delivered', 'label': 'Livré', 'icon': Icons.check_circle},
     ];
 
@@ -215,20 +218,15 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
                   height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isCompleted
-                        ? const Color(0xFF0B6E3A)
-                        : Colors.grey.shade300,
+                    color: isCompleted ? const Color(0xFF0B6E3A) : Colors.grey.shade300,
                   ),
-                  child: Icon(step['icon'] as IconData,
-                      color: Colors.white, size: 20),
+                  child: Icon(step['icon'] as IconData, color: Colors.white, size: 20),
                 ),
                 if (!isLast)
                   Container(
                     width: 2,
                     height: 60,
-                    color: isCompleted
-                        ? const Color(0xFF0B6E3A)
-                        : Colors.grey.shade300,
+                    color: isCompleted ? const Color(0xFF0B6E3A) : Colors.grey.shade300,
                   ),
               ],
             ),
@@ -242,24 +240,19 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
                     Text(
                       step['label'] as String,
                       style: TextStyle(
-                        fontWeight:
-                            isCompleted ? FontWeight.bold : FontWeight.normal,
-                        color:
-                            isCompleted ? const Color(0xFF0B6E3A) : Colors.grey,
+                        fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
+                        color: isCompleted ? const Color(0xFF0B6E3A) : Colors.grey,
                       ),
                     ),
                     if (isCurrent)
                       const Text(
                         'En cours',
-                        style:
-                            TextStyle(fontSize: 12, color: Color(0xFF0B6E3A)),
+                        style: TextStyle(fontSize: 12, color: Color(0xFF0B6E3A)),
                       ),
-                    if (step['status'] == 'delivered' &&
-                        parcel.deliveryDate != null)
+                    if (step['status'] == 'delivered' && parcel.deliveryDate != null)
                       Text(
                         _formatDate(parcel.deliveryDate!),
-                        style:
-                            const TextStyle(fontSize: 11, color: Colors.grey),
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                   ],
                 ),
@@ -321,13 +314,42 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
     }
   }
 
+  Future<void> _playAudio(String audioUrl) async {
+    try {
+      if (_currentlyPlayingAudioUrl == audioUrl) {
+        await _audioPlayer.stop();
+        setState(() {
+          _currentlyPlayingAudioUrl = null;
+        });
+      } else {
+        await _audioPlayer.stop();
+        await _audioPlayer.play(UrlSource(audioUrl));
+        setState(() {
+          _currentlyPlayingAudioUrl = audioUrl;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur lecture audio: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('Suivre un colis'),
-        backgroundColor: const Color(0xFF0B6E3A),
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Suivre un colis',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1A2B3C),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           if (_trackedParcel != null)
             IconButton(
@@ -341,178 +363,11 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Recherche avec suggestions
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        // Champ de recherche avec suggestions
-                        Autocomplete<String>(
-                          optionsBuilder: (TextEditingValue textEditingValue) {
-                            if (textEditingValue.text.isEmpty) {
-                              return const Iterable<String>.empty();
-                            }
-                            return _generateSuggestions(
-                                textEditingValue.text.toUpperCase());
-                          },
-                          onSelected: (String selection) {
-                            _trackParcel(trackingNumber: selection);
-                          },
-                          fieldViewBuilder: (context, controller, focusNode,
-                              onFieldSubmitted) {
-                            return CustomTextField(
-                              controller: controller,
-                              label: 'Numéro de suivi',
-                              prefixIcon: Icons.search,
-                              hint: 'Ex: COL-20260526-ADE4B8',
-                              suffixIcon: _trackingController.text.isNotEmpty
-                                  ? Icons.clear
-                                  : null,
-                            );
-                          },
-                          optionsViewBuilder: (context, onSelected, options) {
-                            return Align(
-                              alignment: Alignment.topLeft,
-                              child: Material(
-                                elevation: 4,
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  width: MediaQuery.of(context).size.width - 48,
-                                  constraints:
-                                      const BoxConstraints(maxHeight: 300),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.white,
-                                  ),
-                                  child: ListView.builder(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    itemCount: options.length,
-                                    itemBuilder: (context, index) {
-                                      final option = options.elementAt(index);
-                                      return ListTile(
-                                        leading: const Icon(Icons.history,
-                                            size: 20, color: Colors.grey),
-                                        title: Text(
-                                          option,
-                                          style: const TextStyle(
-                                              fontFamily: 'monospace'),
-                                        ),
-                                        trailing: const Icon(
-                                            Icons.arrow_forward,
-                                            size: 16,
-                                            color: Colors.grey),
-                                        onTap: () => onSelected(option),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        CustomButton(
-                          text: 'Suivre mon colis',
-                          onPressed: () => _trackParcel(),
-                          isLoading: _isSearching,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Recherches récentes
-                  if (_recentSearches.isNotEmpty &&
-                      _trackedParcel == null &&
-                      !_isSearching)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Divider(),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Recherches récentes',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _recentSearches.clear();
-                                  });
-                                },
-                                child: const Text(
-                                  'Effacer',
-                                  style: TextStyle(
-                                      fontSize: 11, color: Colors.red),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _recentSearches.map((search) {
-                              return GestureDetector(
-                                onTap: () =>
-                                    _trackParcel(trackingNumber: search),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border:
-                                        Border.all(color: Colors.grey.shade300),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.history,
-                                          size: 14, color: Colors.grey),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        search,
-                                        style: const TextStyle(
-                                            fontSize: 12,
-                                            fontFamily: 'monospace'),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      GestureDetector(
-                                        onTap: () =>
-                                            _removeRecentSearch(search),
-                                        child: const Icon(Icons.close,
-                                            size: 14, color: Colors.grey),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            // Carte de recherche modernisée
+            _buildSearchCard(),
             const SizedBox(height: 16),
 
-            // Résultat
+            // Résultat de la recherche
             if (_trackedParcel != null) ...[
               _buildParcelResultCard(),
               const SizedBox(height: 16),
@@ -524,14 +379,235 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
     );
   }
 
+  Widget _buildSearchCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // Icône de recherche
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B6E3A).withAlpha(15),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.search_rounded,
+                size: 32,
+                color: Color(0xFF0B6E3A),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Suivez votre colis en temps réel',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A2B3C),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Entrez votre numéro de suivi pour connaître la localisation de votre colis',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            
+            // Champ de recherche
+            TextField(
+              controller: _trackingController,
+              focusNode: _focusNode,
+              decoration: InputDecoration(
+                hintText: 'Ex: COL-20260526-ADE4B8',
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF0B6E3A)),
+                suffixIcon: _trackingController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => _trackingController.clear(),
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFF0B6E3A), width: 1.5),
+                ),
+              ),
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 14,
+              ),
+              onSubmitted: (_) => _trackParcel(),
+            ),
+            const SizedBox(height: 16),
+            
+            // Bouton de recherche
+            CustomButton(
+              text: 'Suivre mon colis',
+              onPressed: () => _trackParcel(),
+              isLoading: _isSearching,
+            ),
+            
+            // Suggestions en temps réel
+            if (_trackingController.text.isNotEmpty &&
+                _generateSuggestions(_trackingController.text).isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'Suggestions:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ),
+                    ..._generateSuggestions(_trackingController.text).map(
+                      (suggestion) => ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.history, size: 18, color: Color(0xFF0B6E3A)),
+                        title: Text(
+                          suggestion,
+                          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward, size: 18),
+                        onTap: () {
+                          _trackingController.text = suggestion;
+                          _trackParcel();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            // Recherches récentes
+            if (_recentSearches.isNotEmpty &&
+                _trackedParcel == null &&
+                !_isSearching &&
+                _trackingController.text.isEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Recherches récentes',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _recentSearches.clear();
+                          });
+                        },
+                        child: const Text(
+                          'Effacer tout',
+                          style: TextStyle(fontSize: 12, color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _recentSearches.map((search) {
+                      return GestureDetector(
+                        onTap: () => _trackParcel(trackingNumber: search),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.history, size: 14, color: Colors.grey),
+                              const SizedBox(width: 6),
+                              Text(
+                                search,
+                                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () => _removeRecentSearch(search),
+                                child: const Icon(Icons.close, size: 14, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildParcelResultCard() {
     final parcel = _trackedParcel!;
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -542,157 +618,88 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      parcel.trackingNumber,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
                         color: parcel.status.color.withAlpha(25),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         parcel.status.label,
-                        style:
-                            TextStyle(fontSize: 12, color: parcel.status.color),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: parcel.status.color),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      parcel.trackingNumber,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                        color: Color(0xFF1A2B3C),
                       ),
                     ),
                   ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (parcel.price != null) ...[
-                      const Text('Montant',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text(
-                        parcel.formattedPrice,
-                        style: const TextStyle(
-                            fontSize: 18,
+                if (parcel.price != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0B6E3A).withAlpha(15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text('Total', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text(
+                          parcel.formattedPrice,
+                          style: const TextStyle(
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF0B6E3A)),
-                      ),
-                    ],
-                    if (parcel.isUrgent)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withAlpha(25),
-                          borderRadius: BorderRadius.circular(12),
+                            color: Color(0xFF0B6E3A),
+                          ),
                         ),
-                        child: const Text(
-                          'URGENT',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                  ],
-                ),
+                      ],
+                    ),
+                  ),
               ],
             ),
-            const Divider(height: 32),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 20),
 
             // Timeline
             _buildStatusTimeline(parcel),
-            const Divider(height: 32),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 20),
 
-            // SECTION: EXPÉDITEUR
-            _buildSectionTitle('Expéditeur', Icons.person_outline),
-            _buildInfoRow('Nom', parcel.senderName, Icons.person),
-            _buildInfoRow('Téléphone', parcel.senderPhone, Icons.phone),
-
-            const Divider(height: 16),
-
-            // SECTION: DESTINATAIRE
-            _buildSectionTitle('Destinataire', Icons.person),
-            _buildInfoRow('Nom', parcel.receiverName, Icons.person),
-            _buildInfoRow('Téléphone', parcel.receiverPhone, Icons.phone),
-            if (parcel.receiverEmail != null &&
-                parcel.receiverEmail!.isNotEmpty)
-              _buildInfoRow('Email', parcel.receiverEmail!, Icons.email),
-            if (parcel.receiverAddress != null &&
-                parcel.receiverAddress!.isNotEmpty)
-              _buildInfoRow(
-                  'Adresse', parcel.receiverAddress!, Icons.location_on),
-
-            const Divider(height: 16),
-
-            // SECTION: DÉTAILS DU COLIS
-            _buildSectionTitle('Détails du colis', Icons.inventory),
-            _buildInfoRow('Description', parcel.description, Icons.description),
-            _buildInfoRow(
-                'Poids', parcel.formattedWeight, Icons.fitness_center),
-            _buildInfoRow('Type', parcel.type.label, Icons.category),
-            if (parcel.length != null ||
-                parcel.width != null ||
-                parcel.height != null)
-              _buildInfoRow('Dimensions', _getDimensions(parcel), Icons.crop),
-            if (parcel.volume > 0)
-              _buildInfoRow('Volume', parcel.formattedVolume, Icons.calculate),
-
-            const Divider(height: 16),
-
-            // SECTION: TRAJET
-            _buildSectionTitle('Trajet', Icons.route),
-            _buildInfoRow('Garage départ', parcel.departureGarageName,
-                Icons.departure_board),
-            if (parcel.arrivalGarageName != null &&
-                parcel.arrivalGarageName!.isNotEmpty)
-              _buildInfoRow('Garage arrivée', parcel.arrivalGarageName!,
-                  Icons.location_on),
-
-            const Divider(height: 16),
-
-            // SECTION: CHAUFFEUR
+            // Informations principales
+            _buildInfoRow(Icons.person_outline, 'Expéditeur', parcel.senderName),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.person, 'Destinataire', parcel.receiverName),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.description, 'Description', parcel.description),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.fitness_center, 'Poids', parcel.formattedWeight),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.category, 'Type', parcel.type.label),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.departure_board, 'Départ', parcel.departureGarageName),
+            if (parcel.arrivalGarageName != null) ...[
+              const SizedBox(height: 12),
+              _buildInfoRow(Icons.location_on, 'Arrivée', parcel.arrivalGarageName!),
+            ],
             if (parcel.hasDriver) ...[
-              _buildSectionTitle('Chauffeur', Icons.delivery_dining),
-              if (parcel.driverName != null)
-                _buildInfoRow('Nom', parcel.driverName!, Icons.person),
-              if (parcel.driverPhone != null)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoRow(
-                          'Téléphone', parcel.driverPhone!, Icons.phone),
-                    ),
-                    IconButton(
-                      icon:
-                          const Icon(Icons.call, color: Colors.green, size: 20),
-                      onPressed: () => _makePhoneCall(parcel.driverPhone!),
-                    ),
-                  ],
-                ),
-              const Divider(height: 16),
+              const SizedBox(height: 12),
+              _buildInfoRow(Icons.delivery_dining, 'Chauffeur', parcel.driverName ?? 'Non assigné'),
             ],
 
-            // SECTION: DATES
-            _buildSectionTitle('Dates importantes', Icons.calendar_today),
-            _buildInfoRow(
-                'Création', _formatDate(parcel.createdAt), Icons.create),
-            if (parcel.pickupDate != null)
-              _buildInfoRow('Ramassage', _formatDate(parcel.pickupDate!),
-                  Icons.inventory),
-            if (parcel.deliveryDate != null)
-              _buildInfoRow('Livraison', _formatDate(parcel.deliveryDate!),
-                  Icons.check_circle),
-            if (parcel.estimatedDeliveryDate != null)
-              _buildInfoRow('Estimée',
-                  _formatDate(parcel.estimatedDeliveryDate!), Icons.schedule),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 20),
 
-            const Divider(height: 16),
-
-            // SECTION: OPTIONS
-            _buildSectionTitle('Options', Icons.settings),
+            // Section options
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -701,16 +708,15 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
                 _buildOptionChip('Assuré', parcel.isInsured, Colors.blue),
                 _buildOptionChip('Payé', parcel.isPaid, Colors.green),
                 _buildOptionChip('Chauffeur', parcel.hasDriver, Colors.orange),
-                _buildOptionChip(
-                    'En cours', parcel.isInProgress, Colors.purple),
+                _buildOptionChip('En cours', parcel.isInProgress, Colors.purple),
                 _buildOptionChip('Terminé', parcel.isFinished, Colors.teal),
               ],
             ),
 
-            // SECTION: PHOTOS
+            // Photos
             if (parcel.photoUrls.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildSectionTitle('Photos', Icons.photo_library),
+              const SizedBox(height: 20),
+              const Text('Photos', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A2B3C))),
               const SizedBox(height: 8),
               SizedBox(
                 height: 100,
@@ -724,33 +730,64 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
               ),
             ],
 
-            // SECTION: NOTES
-            if (parcel.notes != null && parcel.notes!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildSectionTitle('Notes', Icons.note),
-              Padding(
-                padding: const EdgeInsets.only(left: 36),
-                child: Text(
-                  parcel.notes!,
-                  style: const TextStyle(
-                      fontSize: 13, fontStyle: FontStyle.italic),
-                ),
+            // Messages vocaux
+            if (parcel.audioUrls.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const Text('Messages vocaux', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A2B3C))),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: parcel.audioUrls.map((audioUrl) {
+                  final isPlaying = _currentlyPlayingAudioUrl == audioUrl;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            isPlaying ? Icons.stop : Icons.play_arrow,
+                            size: 18,
+                            color: const Color(0xFF0B6E3A),
+                          ),
+                          onPressed: () => _playAudio(audioUrl),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text('Message vocal', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
             ],
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Bouton Voir tous les détails
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
+              child: ElevatedButton(
                 onPressed: _viewFullDetails,
-                icon: const Icon(Icons.visibility),
-                label: const Text('Voir tous les détails'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF0B6E3A),
-                  side: const BorderSide(color: Color(0xFF0B6E3A)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0B6E3A),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Voir tous les détails',
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -766,11 +803,13 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
         Expanded(
           child: OutlinedButton.icon(
             onPressed: _shareTrackingNumber,
-            icon: const Icon(Icons.share),
+            icon: const Icon(Icons.share, size: 18),
             label: const Text('Partager'),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF0B6E3A),
               side: const BorderSide(color: Color(0xFF0B6E3A)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -778,11 +817,13 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
         Expanded(
           child: OutlinedButton.icon(
             onPressed: _downloadReceipt,
-            icon: const Icon(Icons.download),
+            icon: const Icon(Icons.download, size: 18),
             label: const Text('Reçu'),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF0B6E3A),
               side: const BorderSide(color: Color(0xFF0B6E3A)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -790,51 +831,32 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
     );
   }
 
-  // ==================== WIDGETS PERSONNALISÉS ====================
-
-  Widget _buildSectionTitle(String title, IconData icon, {Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color ?? const Color(0xFF0B6E3A)),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: color ?? const Color(0xFF0B6E3A),
-            ),
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B6E3A).withAlpha(15),
+            borderRadius: BorderRadius.circular(10),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: Colors.grey.shade600),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-            ),
+          child: Icon(icon, size: 16, color: const Color(0xFF0B6E3A)),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-            ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A2B3C)),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -847,7 +869,7 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
         width: 100,
         height: 100,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           color: Colors.grey.shade200,
           image: DecorationImage(
             image: NetworkImage(fullUrl),
@@ -865,6 +887,7 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.black,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: InteractiveViewer(
           minScale: 0.5,
           maxScale: 4.0,
@@ -876,12 +899,12 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
 
   Widget _buildOptionChip(String label, bool isActive, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: isActive ? color.withAlpha(25) : Colors.grey.withAlpha(25),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isActive ? color : Colors.grey,
+          color: isActive ? color : Colors.grey.shade300,
           width: 0.5,
         ),
       ),
@@ -890,27 +913,20 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
         children: [
           Icon(
             isActive ? Icons.check_circle : Icons.circle_outlined,
-            size: 14,
+            size: 12,
             color: isActive ? color : Colors.grey,
           ),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
               color: isActive ? color : Colors.grey,
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _getDimensions(Parcel parcel) {
-    final parts = <String>[];
-    if (parcel.length != null) parts.add('L: ${parcel.length} cm');
-    if (parcel.width != null) parts.add('l: ${parcel.width} cm');
-    if (parcel.height != null) parts.add('H: ${parcel.height} cm');
-    return parts.join(' x ');
   }
 }

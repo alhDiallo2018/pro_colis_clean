@@ -1,4 +1,6 @@
 // mobile/lib/screens/dashboard/driver_dashboard.dart
+// ignore_for_file: unused_import
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/models/parcel.dart';
@@ -7,6 +9,7 @@ import 'package:procolis/services/api_service.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/parcel_provider.dart';
+import '../parcel/free_parcels_screen.dart';
 import '../parcel/new_parcel_screen.dart';
 import '../parcel/parcel_detail_screen.dart';
 import '../profile/profile_screen.dart';
@@ -30,6 +33,7 @@ class _DriverDashboardState extends ConsumerState<DriverDashboard> {
   void _loadData() {
     Future.microtask(() {
       ref.read(parcelProvider.notifier).loadDriverParcels();
+      ref.read(parcelProvider.notifier).loadFreeParcels();
     });
   }
 
@@ -50,6 +54,8 @@ class _DriverDashboardState extends ConsumerState<DriverDashboard> {
         items: const [
           BottomNavigationBarItem(
               icon: Icon(Icons.local_shipping), label: 'Mes colis'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.gavel), label: 'Libre service'),
           BottomNavigationBarItem(icon: Icon(Icons.add_box), label: 'Envoyer'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
@@ -63,13 +69,549 @@ class _DriverDashboardState extends ConsumerState<DriverDashboard> {
         return _MyParcelsScreen(
             parcelState: parcelState, onRefresh: _loadData, user: user);
       case 1:
-        return const NewParcelScreen();
+        return const FreeParcelsForDriversScreen();
       case 2:
+        return const NewParcelScreen();
+      case 3:
         return const ProfileScreen();
       default:
         return _MyParcelsScreen(
             parcelState: parcelState, onRefresh: _loadData, user: user);
     }
+  }
+}
+
+// Écran pour les colis en libre service (vue chauffeur)
+class FreeParcelsForDriversScreen extends ConsumerStatefulWidget {
+  const FreeParcelsForDriversScreen({super.key});
+
+  @override
+  ConsumerState<FreeParcelsForDriversScreen> createState() => _FreeParcelsForDriversScreenState();
+}
+
+class _FreeParcelsForDriversScreenState extends ConsumerState<FreeParcelsForDriversScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _loadFreeParcels();
+  }
+
+  void _loadFreeParcels() {
+    Future.microtask(() {
+      ref.read(parcelProvider.notifier).loadFreeParcels();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parcelState = ref.watch(parcelProvider);
+    final freeParcels = parcelState.freeParcels;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Colis en Libre Service'),
+        backgroundColor: const Color(0xFF0B6E3A),
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: _showInfoDialog,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(parcelProvider.notifier).loadFreeParcels();
+        },
+        child: parcelState.isLoadingFreeParcels
+            ? const Center(child: CircularProgressIndicator())
+            : freeParcels.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: freeParcels.length,
+                    itemBuilder: (context, index) {
+                      final parcel = freeParcels[index];
+                      return _DriverFreeParcelCard(parcel: parcel);
+                    },
+                  ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox, size: 80, color: Colors.grey.withAlpha(100)),
+          const SizedBox(height: 16),
+          const Text(
+            'Aucun colis en libre service',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Les clients n\'ont pas encore mis de colis en libre service',
+            style: TextStyle(color: Colors.grey.withAlpha(150)),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Comment faire une offre ?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pour faire une offre sur un colis :',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            _buildInfoRow('1. Cliquez sur "Faire une offre"'),
+            _buildInfoRow('2. Proposez votre prix'),
+            _buildInfoRow('3. Ajoutez un message si souhaité'),
+            const SizedBox(height: 12),
+            const Text(
+              'Si votre offre est acceptée :',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            _buildInfoRow('• Vous serez notifié'),
+            _buildInfoRow('• Le colis vous sera assigné'),
+            _buildInfoRow('• Vous pourrez suivre la livraison'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(text),
+    );
+  }
+}
+
+// Carte pour les colis en libre service (version chauffeur avec vérification des offres)
+class _DriverFreeParcelCard extends ConsumerStatefulWidget {
+  final Parcel parcel;
+
+  const _DriverFreeParcelCard({required this.parcel});
+
+  @override
+  ConsumerState<_DriverFreeParcelCard> createState() => _DriverFreeParcelCardState();
+}
+
+class _DriverFreeParcelCardState extends ConsumerState<_DriverFreeParcelCard> {
+  bool _isMakingOffer = false;
+  final _priceController = TextEditingController();
+  final _messageController = TextEditingController();
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  /// Vérifie si le chauffeur actuel a déjà fait une offre
+  bool _hasDriverMadeBid() {
+    final authState = ref.read(authProvider);
+    final currentDriverId = authState.user?.id;
+    
+    if (currentDriverId == null || currentDriverId.isEmpty) return false;
+    
+    // Nettoyer les IDs pour la comparaison
+    final cleanCurrentId = currentDriverId.trim().toLowerCase();
+    
+    return widget.parcel.bids.any((bid) {
+      final cleanBidId = bid.driverId.trim().toLowerCase();
+      return cleanBidId == cleanCurrentId;
+    });
+  }
+
+  /// Récupère l'offre du chauffeur actuel
+  Bid? _getDriverBid() {
+    final authState = ref.read(authProvider);
+    final currentDriverId = authState.user?.id;
+    
+    if (currentDriverId == null || currentDriverId.isEmpty) return null;
+    
+    final cleanCurrentId = currentDriverId.trim().toLowerCase();
+    
+    try {
+      return widget.parcel.bids.firstWhere((bid) => 
+        bid.driverId.trim().toLowerCase() == cleanCurrentId
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _makeOffer() async {
+    final price = double.tryParse(_priceController.text);
+    if (price == null || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez entrer un prix valide'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isMakingOffer = true);
+
+    final authState = ref.read(authProvider);
+    final currentUser = authState.user;
+    
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur: utilisateur non connecté'), backgroundColor: Colors.red),
+      );
+      setState(() => _isMakingOffer = false);
+      return;
+    }
+
+    final result = await ref.read(parcelProvider.notifier).makeBid(
+      widget.parcel.id,
+      {
+        'price': price,
+        'message': _messageController.text.trim().isEmpty ? null : _messageController.text.trim(),
+        'driverId': currentUser.id,
+        'driverName': currentUser.fullName,
+        'driverPhone': currentUser.phone,
+      },
+    );
+
+    setState(() => _isMakingOffer = false);
+
+    if (result['success'] == true && mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Offre de ${price.toStringAsFixed(0)} FCFA envoyée avec succès !'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      // Recharger pour mettre à jour l'état
+      ref.read(parcelProvider.notifier).loadFreeParcels();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Erreur lors de l\'envoi de l\'offre'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showOfferDialog() {
+    // Vérifier si une offre existe déjà
+    if (_hasDriverMadeBid()) {
+      final myBid = _getDriverBid();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Vous avez déjà fait une offre de ${myBid?.formattedPrice ?? ""} sur ce colis'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    _priceController.clear();
+    _messageController.clear();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Faire une offre'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Colis: ${widget.parcel.trackingNumber}'),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _priceController,
+              decoration: const InputDecoration(
+                labelText: 'Votre offre (FCFA)',
+                hintText: 'Ex: 5000',
+                prefixIcon: Icon(Icons.attach_money),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _messageController,
+              decoration: const InputDecoration(
+                labelText: 'Message (optionnel)',
+                hintText: 'Ajoutez un message au client...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+            if (widget.parcel.proposedPrice != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withAlpha(25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info, size: 16, color: Colors.amber[700]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Prix suggéré par le client: ${widget.parcel.formattedProposedPrice}',
+                        style: TextStyle(fontSize: 12, color: Colors.amber[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: _makeOffer,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0B6E3A),
+            ),
+            child: const Text('Envoyer l\'offre'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToDetails() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FreeParcelDetailsScreen(parcel: widget.parcel),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parcel = widget.parcel;
+    final hasMadeBid = _hasDriverMadeBid();
+    final myBid = _getDriverBid();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: _navigateToDetails,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withAlpha(25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.gavel, size: 14, color: Colors.purple[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          'À marchander',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.purple[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    parcel.trackingNumber,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Message si le chauffeur a déjà fait une offre
+              if (hasMadeBid)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withAlpha(15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, size: 16, color: Colors.green[700]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '✅ Vous avez déjà fait une offre de ${myBid?.formattedPrice ?? ""} sur ce colis',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'De: ${parcel.departureGarageName}',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'À: ${parcel.arrivalGarageName ?? "Non spécifié"}',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.rule, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    parcel.formattedWeight,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(width: 16),
+                  Icon(Icons.description, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      parcel.description,
+                      style: const TextStyle(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (parcel.proposedPrice != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withAlpha(15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.attach_money, size: 14, color: Colors.amber[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Prix suggéré: ${parcel.formattedProposedPrice}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.amber[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 16),
+              if (_isMakingOffer)
+                const Center(child: CircularProgressIndicator())
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: hasMadeBid
+                      ? OutlinedButton.icon(
+                          onPressed: null,
+                          icon: Icon(Icons.check_circle, color: Colors.orange[700]),
+                          label: Text(
+                            '✅ Offre déjà envoyée - ${myBid?.formattedPrice ?? ""}',
+                            style: TextStyle(color: Colors.orange[700]),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.orange[300]!),
+                            backgroundColor: Colors.orange.withAlpha(20),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: _showOfferDialog,
+                          icon: const Icon(Icons.gavel, size: 18),
+                          label: const Text('💰 Faire une offre'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0B6E3A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -169,44 +711,6 @@ class _MyParcelsScreenState extends State<_MyParcelsScreen>
       default:
         return '🟢 Disponible';
     }
-  }
-
-  /// Format une date avec affichage "Aujourd'hui", "Hier", ou date normale
-  String _formatRelativeDate(DateTime? date) {
-    if (date == null) return 'Date non définie';
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final targetDate = DateTime(date.year, date.month, date.day);
-
-    if (targetDate == today) {
-      return 'Aujourd\'hui';
-    } else if (targetDate == yesterday) {
-      return 'Hier';
-    } else {
-      final difference = today.difference(targetDate).inDays;
-      if (difference < 7) {
-        return 'Il y a $difference jours';
-      } else if (difference < 30) {
-        final weeks = (difference / 7).floor();
-        return 'Il y a $weeks semaine${weeks > 1 ? 's' : ''}';
-      } else {
-        return '${date.day}/${date.month}/${date.year}';
-      }
-    }
-  }
-
-  /// Format l'heure
-  String _formatTime(DateTime date) {
-    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-  }
-
-  /// Format complet date + heure relative
-  String _formatDateTime(DateTime date) {
-    final relativeDate = _formatRelativeDate(date);
-    final time = _formatTime(date);
-    return '$relativeDate à $time';
   }
 
   @override
@@ -329,9 +833,7 @@ class _MyParcelsScreenState extends State<_MyParcelsScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _getDriverStatusText(
-                                driverStatus.toString(),
-                              ),
+                              _getDriverStatusText(driverStatus.toString()),
                               style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,
@@ -511,6 +1013,8 @@ class _ParcelCardState extends State<_ParcelCard> {
     switch (status) {
       case ParcelStatus.pending:
         return Colors.orange;
+      case ParcelStatus.free:
+        return Colors.purple;
       case ParcelStatus.confirmed:
         return Colors.blue;
       case ParcelStatus.pickedUp:
@@ -532,6 +1036,8 @@ class _ParcelCardState extends State<_ParcelCard> {
     switch (status) {
       case ParcelStatus.pending:
         return '⏳';
+      case ParcelStatus.free:
+        return '🔓';
       case ParcelStatus.confirmed:
         return '✅';
       case ParcelStatus.pickedUp:
@@ -855,6 +1361,9 @@ class _ParcelCardState extends State<_ParcelCard> {
   Widget _buildActionButtons() {
     final parcel = widget.parcel;
 
+    // Les colis en libre service ne sont pas affichés ici
+    // Ils sont dans l'onglet dédié
+    
     if (parcel.status == ParcelStatus.pending ||
         parcel.status == ParcelStatus.confirmed) {
       return _buildActionButton(

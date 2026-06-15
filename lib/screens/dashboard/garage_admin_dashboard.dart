@@ -1,4 +1,6 @@
 // mobile/lib/screens/dashboard/garage_admin_dashboard.dart
+// ignore_for_file: prefer_const_constructors, avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/screens/parcel/parcel_detail_screen.dart';

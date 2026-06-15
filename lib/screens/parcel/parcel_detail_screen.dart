@@ -1,4 +1,7 @@
 // mobile/lib/screens/parcel/parcel_detail_screen.dart
+// ignore_for_file: unused_local_variable, unused_element
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/models/parcel.dart';
@@ -26,24 +29,26 @@ class ParcelDetailScreen extends ConsumerStatefulWidget {
 
 class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
   final ApiService _apiService = ApiService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
   List<ParcelEvent> _events = [];
   bool _isLoadingEvents = true;
   bool _isLoadingParcel = true;
   bool _isUpdating = false;
   late Parcel _parcel;
   String _errorMessage = '';
+  String? _currentlyPlayingAudioUrl;
 
   final _notesController = TextEditingController();
   final _searchController = TextEditingController();
 
   final Map<String, bool> _expandedSections = {
     'info': true,
-    'status': true,
-    'timeline': true,
+    'shipping': true,
+    'financial': false,
     'photos': false,
     'videos': false,
-    'financial': false,
-    'shipping': false,
+    'audios': false,
+    'timeline': true,
   };
 
   @override
@@ -51,13 +56,25 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
     super.initState();
     _parcel = widget.parcel;
     _loadData();
+    _setupAudioListeners();
   }
 
   @override
   void dispose() {
     _notesController.dispose();
     _searchController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  void _setupAudioListeners() {
+    _audioPlayer.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() {
+          _currentlyPlayingAudioUrl = null;
+        });
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -227,77 +244,108 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
   }
 
   void _onNavBarTap(int index, User? user) {
-  if (user == null) return;
-  
-  switch (user.role) {
-    case UserRole.client:
-      switch (index) {
-        case 0: // Mes colis
-          _navigateToDashboard();
-          break;
-        case 1: // Envoyer
-          Navigator.pop(context);
-          break;
-        case 2: // Suivre
-          break;
-        case 3: // Profil
-          _navigateToProfile();
-          break;
-      }
-      break;
-      
-    case UserRole.driver:
-      switch (index) {
-        case 0: // Mes colis
-          _navigateToDashboard();
-          break;
-        case 1: // Envoyer
-          Navigator.pop(context);
-          break;
-        case 2: // Profil
-          _navigateToProfile();
-          break;
-      }
-      break;
-      
-    case UserRole.admin:
-      switch (index) {
-        case 0: // Tableau de bord
-          _navigateToDashboard();
-          break;
-        case 1: // Colis
-          break;
-        case 2: // Chauffeurs
-          break;
-        case 3: // Profil
-          _navigateToProfile();
-          break;
-      }
-      break;
-      
-    case UserRole.superAdmin:
-      switch (index) {
-        case 0: // Tableau de bord
-          _navigateToDashboard();
-          break;
-        case 1: // Utilisateurs
-          break;
-        case 2: // Colis
-          break;
-        case 3: // Profil
-          _navigateToProfile();
-          break;
-      }
-      break;
+    if (user == null) return;
+    
+    switch (user.role) {
+      case UserRole.client:
+        switch (index) {
+          case 0: _navigateToDashboard(); break;
+          case 1: Navigator.pop(context); break;
+          case 2: break;
+          case 3: _navigateToProfile(); break;
+        }
+        break;
+      case UserRole.driver:
+        switch (index) {
+          case 0: _navigateToDashboard(); break;
+          case 1: Navigator.pop(context); break;
+          case 2: _navigateToProfile(); break;
+        }
+        break;
+      case UserRole.admin:
+        switch (index) {
+          case 0: _navigateToDashboard(); break;
+          case 3: _navigateToProfile(); break;
+        }
+        break;
+      case UserRole.superAdmin:
+        switch (index) {
+          case 0: _navigateToDashboard(); break;
+          case 3: _navigateToProfile(); break;
+        }
+        break;
+    }
   }
-}
 
-void _navigateToProfile() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (context) => const ProfileScreen()),
-  );
-}
+  void _navigateToProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfileScreen()),
+    );
+  }
+
+  // ==================== FONCTIONS AUDIO ====================
+
+  Future<void> _playAudio(String audioUrl) async {
+    try {
+      final fullUrl = _getFullUrl(audioUrl);
+      
+      if (_currentlyPlayingAudioUrl == audioUrl) {
+        await _audioPlayer.stop();
+        setState(() {
+          _currentlyPlayingAudioUrl = null;
+        });
+      } else {
+        await _audioPlayer.stop();
+        await _audioPlayer.play(UrlSource(fullUrl));
+        setState(() {
+          _currentlyPlayingAudioUrl = audioUrl;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur lecture audio: $e');
+      _showSnackbar('Erreur lors de la lecture audio', isError: true);
+    }
+  }
+
+  Widget _buildAudioTile(String audioUrl, int index) {
+    final isPlaying = _currentlyPlayingAudioUrl == audioUrl;
+    
+    return Container(
+      margin: const EdgeInsets.only(right: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B6E3A).withAlpha(10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF0B6E3A).withAlpha(20)),
+      ),
+      child: SizedBox(
+        width: 160,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: Icon(
+                isPlaying ? Icons.stop : Icons.play_arrow,
+                size: 28,
+                color: const Color(0xFF0B6E3A),
+              ),
+              onPressed: () => _playAudio(audioUrl),
+            ),
+            Text(
+              'Message ${index + 1}',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 4),
+            const Icon(Icons.mic, size: 12, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDurationFromUrl(String url) {
+    return '00:30';
+  }
 
   // ==================== FONCTIONS D'APPEL ====================
 
@@ -450,7 +498,7 @@ void _navigateToProfile() {
     final isAdmin = user?.isAdmin ?? false;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: _buildAppBar(),
       body: _isLoadingParcel
           ? const Center(child: CircularProgressIndicator())
@@ -458,13 +506,35 @@ void _navigateToProfile() {
               ? _buildErrorWidget()
               : _buildBody(isDriver, isAdmin),
       floatingActionButton: _buildFloatingActionButton(isDriver, isAdmin),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _getCurrentIndex(user),
-        onTap: (index) => _onNavBarTap(index, user),
-        selectedItemColor: const Color(0xFF0B6E3A),
-        unselectedItemColor: Colors.grey,
-        items: _getNavBarItems(user),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 30,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _getCurrentIndex(user),
+            onTap: (index) => _onNavBarTap(index, user),
+            selectedItemColor: const Color(0xFF0B6E3A),
+            unselectedItemColor: Colors.grey.shade400,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            selectedFontSize: 12,
+            unselectedFontSize: 12,
+            showUnselectedLabels: true,
+            items: _getNavBarItems(user),
+          ),
+        ),
       ),
     );
   }
@@ -476,19 +546,32 @@ void _navigateToProfile() {
         children: [
           Text(
             _parcel.trackingNumber,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 16, 
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+            ),
           ),
-          Text(
-            _parcel.status.label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(30),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _parcel.status.label,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ),
       backgroundColor: const Color(0xFF0B6E3A),
       foregroundColor: Colors.white,
       elevation: 0,
+      centerTitle: false,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: const Icon(Icons.arrow_back_ios),
         onPressed: _navigateToDashboard,
       ),
       actions: [
@@ -569,6 +652,8 @@ void _navigateToProfile() {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0B6E3A),
               foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],
@@ -588,53 +673,69 @@ void _navigateToProfile() {
           if ((isDriver || isAdmin) && !_parcel.isFinished) _buildQuickActionsRow(),
           const SizedBox(height: 16),
           
-          _buildCollapsibleSection(
+          _buildSectionCard(
             key: 'info',
-            title: 'Informations du colis',
+            title: 'Informations',
             icon: Icons.info_outline,
+            color: Colors.blue,
             child: _buildInfoContent(),
           ),
           const SizedBox(height: 12),
           
-          _buildCollapsibleSection(
+          _buildSectionCard(
             key: 'shipping',
-            title: 'Lieu de départ et livraison',
+            title: 'Transport',
             icon: Icons.route,
+            color: Colors.orange,
             child: _buildShippingContent(),
           ),
           const SizedBox(height: 12),
           
           if (_parcel.price != null || _parcel.isUrgent || _parcel.isInsured)
-            _buildCollapsibleSection(
+            _buildSectionCard(
               key: 'financial',
-              title: 'Informations financières',
+              title: 'Paiement',
               icon: Icons.attach_money,
+              color: Colors.green,
               child: _buildFinancialContent(),
             ),
           const SizedBox(height: 12),
           
           if (_parcel.photoUrls.isNotEmpty)
-            _buildCollapsibleSection(
+            _buildSectionCard(
               key: 'photos',
               title: 'Photos (${_parcel.photoUrls.length})',
               icon: Icons.photo_library,
+              color: Colors.purple,
               child: _buildPhotosContent(),
             ),
           const SizedBox(height: 12),
           
           if (_parcel.videoUrls.isNotEmpty)
-            _buildCollapsibleSection(
+            _buildSectionCard(
               key: 'videos',
               title: 'Vidéos (${_parcel.videoUrls.length})',
               icon: Icons.video_library,
+              color: Colors.teal,
               child: _buildVideosContent(),
             ),
           const SizedBox(height: 12),
           
-          _buildCollapsibleSection(
+          if (_parcel.audioUrls.isNotEmpty)
+            _buildSectionCard(
+              key: 'audios',
+              title: 'Messages vocaux (${_parcel.audioUrls.length})',
+              icon: Icons.mic,
+              color: Colors.red,
+              child: _buildAudiosContent(),
+            ),
+          const SizedBox(height: 12),
+          
+          _buildSectionCard(
             key: 'timeline',
             title: 'Historique',
             icon: Icons.history,
+            color: Colors.grey,
             child: _buildTimelineContent(),
           ),
           const SizedBox(height: 80),
@@ -643,38 +744,58 @@ void _navigateToProfile() {
     );
   }
 
-  Widget _buildCollapsibleSection({
+  Widget _buildSectionCard({
     required String key,
     required String title,
     required IconData icon,
+    required Color color,
     required Widget child,
   }) {
     final isExpanded = _expandedSections[key] ?? false;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
             leading: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B6E3A).withAlpha(25),
+                color: color.withAlpha(25),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: const Color(0xFF0B6E3A), size: 20),
+              child: Icon(icon, color: color, size: 22),
             ),
             title: Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600, 
+                fontSize: 16,
+                color: Color(0xFF1A2B3C),
+              ),
             ),
             trailing: Icon(
               isExpanded ? Icons.expand_less : Icons.expand_more,
-              color: Colors.grey,
+              color: Colors.grey.shade500,
             ),
             onTap: () => _toggleSection(key),
           ),
-          if (isExpanded) Padding(padding: const EdgeInsets.all(16), child: child),
+          if (isExpanded) 
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: child,
+            ),
         ],
       ),
     );
@@ -688,73 +809,67 @@ void _navigateToProfile() {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: _parcel.status.color.withAlpha(50),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
+        child: Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(30),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    _parcel.statusIcon,
-                    style: const TextStyle(fontSize: 28),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _parcel.status.label,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getStatusDescription(),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withAlpha(200),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(30),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Text(
+                _parcel.statusIcon,
+                style: const TextStyle(fontSize: 32),
+              ),
             ),
-            if (_parcel.estimatedDeliveryDate != null) ...[
-              const SizedBox(height: 16),
-              Divider(color: Colors.white.withAlpha(50)),
-              const SizedBox(height: 12),
-              Row(
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.schedule, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
                   Text(
-                    'Livraison estimée: ${_formatDate(_parcel.estimatedDeliveryDate!)}',
-                    style: const TextStyle(color: Colors.white),
+                    _parcel.status.label,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _getStatusDescription(),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withAlpha(200),
+                    ),
+                  ),
+                  if (_parcel.estimatedDeliveryDate != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.schedule, color: Colors.white, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Livraison estimée: ${_formatDate(_parcel.estimatedDeliveryDate!)}',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -765,6 +880,8 @@ void _navigateToProfile() {
     switch (_parcel.status) {
       case ParcelStatus.pending:
         return 'Votre colis est en attente de traitement';
+      case ParcelStatus.free:
+        return 'Libre service - En attente d\'offres';
       case ParcelStatus.confirmed:
         return 'Votre colis a été confirmé';
       case ParcelStatus.pickedUp:
@@ -816,7 +933,7 @@ void _navigateToProfile() {
         avatar: Icon(icon, size: 16, color: Colors.white),
         onPressed: _isUpdating ? null : onPressed,
         backgroundColor: color,
-        labelStyle: const TextStyle(color: Colors.white),
+        labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
     );
@@ -825,21 +942,31 @@ void _navigateToProfile() {
   Widget _buildInfoContent() {
     return Column(
       children: [
-        _buildInfoTile(Icons.person, 'Expéditeur', _parcel.senderName),
-        _buildInfoTile(Icons.phone, 'Téléphone expéditeur', _parcel.senderPhone),
+        _buildModernInfoRow(Icons.person, 'Expéditeur', _parcel.senderName),
         const SizedBox(height: 12),
-        _buildInfoTile(Icons.person_outline, 'Destinataire', _parcel.receiverName),
-        _buildInfoTile(Icons.phone, 'Téléphone destinataire', _parcel.receiverPhone),
-        if (_parcel.receiverEmail != null)
-          _buildInfoTile(Icons.email, 'Email destinataire', _parcel.receiverEmail!),
-        if (_parcel.receiverAddress != null)
-          _buildInfoTile(Icons.location_on, 'Adresse de livraison', _parcel.receiverAddress!),
+        _buildModernInfoRow(Icons.phone, 'Téléphone', _parcel.senderPhone),
         const SizedBox(height: 12),
-        _buildInfoTile(Icons.description, 'Description', _parcel.description),
-        _buildInfoTile(Icons.fitness_center, 'Poids', '${_parcel.weight} kg'),
-        _buildInfoTile(Icons.category, 'Type', _parcel.type.label),
-        if (_parcel.notes != null)
-          _buildInfoTile(Icons.note, 'Notes', _parcel.notes!, isLongText: true),
+        _buildModernInfoRow(Icons.person_outline, 'Destinataire', _parcel.receiverName),
+        const SizedBox(height: 12),
+        _buildModernInfoRow(Icons.phone, 'Téléphone', _parcel.receiverPhone),
+        if (_parcel.receiverEmail != null) ...[
+          const SizedBox(height: 12),
+          _buildModernInfoRow(Icons.email, 'Email', _parcel.receiverEmail!),
+        ],
+        if (_parcel.receiverAddress != null) ...[
+          const SizedBox(height: 12),
+          _buildModernInfoRow(Icons.location_on, 'Adresse', _parcel.receiverAddress!),
+        ],
+        const Divider(height: 24),
+        _buildModernInfoRow(Icons.description, 'Description', _parcel.description),
+        const SizedBox(height: 12),
+        _buildModernInfoRow(Icons.fitness_center, 'Poids', _parcel.formattedWeight),
+        const SizedBox(height: 12),
+        _buildModernInfoRow(Icons.category, 'Type', _parcel.type.label),
+        if (_parcel.notes != null) ...[
+          const SizedBox(height: 12),
+          _buildModernInfoRow(Icons.note, 'Notes', _parcel.notes!, isLongText: true),
+        ],
       ],
     );
   }
@@ -847,20 +974,38 @@ void _navigateToProfile() {
   Widget _buildShippingContent() {
     return Column(
       children: [
-        _buildInfoTile(Icons.departure_board, 'Lieu de départ', _parcel.departureGarageName),
-        if (_parcel.arrivalGarageName != null)
-          _buildInfoTile(Icons.location_on, 'Lieu de livraison', _parcel.arrivalGarageName!),
+        _buildModernInfoRow(Icons.departure_board, 'Départ', _parcel.departureGarageName),
+        if (_parcel.arrivalGarageName != null) ...[
+          const SizedBox(height: 12),
+          _buildModernInfoRow(Icons.location_on, 'Arrivée', _parcel.arrivalGarageName!),
+        ],
         const SizedBox(height: 12),
-        _buildInfoTile(Icons.create, 'Création', _formatDate(_parcel.createdAt)),
-        if (_parcel.pickupDate != null)
-          _buildInfoTile(Icons.inventory, 'Ramassage', _formatDate(_parcel.pickupDate!)),
-        if (_parcel.deliveryDate != null)
-          _buildInfoTile(Icons.check_circle, 'Livraison', _formatDate(_parcel.deliveryDate!)),
+        _buildModernInfoRow(Icons.calendar_today, 'Création', _formatDate(_parcel.createdAt)),
+        if (_parcel.pickupDate != null) ...[
+          const SizedBox(height: 12),
+          _buildModernInfoRow(Icons.inventory, 'Ramassage', _formatDate(_parcel.pickupDate!)),
+        ],
+        if (_parcel.deliveryDate != null) ...[
+          const SizedBox(height: 12),
+          _buildModernInfoRow(Icons.check_circle, 'Livraison', _formatDate(_parcel.deliveryDate!)),
+        ],
         if (_parcel.hasDriver) ...[
-          const Divider(),
-          _buildInfoTile(Icons.delivery_dining, 'Chauffeur', _parcel.driverName ?? 'Non assigné'),
-          if (_parcel.driverPhone != null)
-            _buildInfoTile(Icons.phone, 'Téléphone chauffeur', _parcel.driverPhone!),
+          const Divider(height: 24),
+          _buildModernInfoRow(Icons.delivery_dining, 'Chauffeur', _parcel.driverName ?? 'Non assigné'),
+          if (_parcel.driverPhone != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildModernInfoRow(Icons.phone, 'Téléphone', _parcel.driverPhone!),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.call, color: Color(0xFF0B6E3A), size: 20),
+                  onPressed: () => _makePhoneCall(_parcel.driverPhone!, _parcel.driverName ?? 'Chauffeur'),
+                ),
+              ],
+            ),
+          ],
         ],
       ],
     );
@@ -870,23 +1015,60 @@ void _navigateToProfile() {
     return Column(
       children: [
         if (_parcel.price != null)
-          _buildInfoTile(Icons.attach_money, 'Prix', _parcel.formattedPrice, isHighlighted: true),
+          _buildModernInfoRow(Icons.attach_money, 'Prix', _parcel.formattedPrice, isHighlighted: true),
         if (_parcel.isUrgent && _parcel.urgentFee != null)
-          _buildInfoTile(Icons.flash_on, 'Frais urgent', '${_parcel.urgentFee!.toInt()} FCFA', isHighlighted: true),
+          _buildModernInfoRow(Icons.flash_on, 'Frais urgent', '${_parcel.urgentFee!.toInt()} FCFA', isHighlighted: true),
         if (_parcel.isInsured && _parcel.insuranceAmount != null)
-          _buildInfoTile(Icons.shield, 'Assurance', '${_parcel.insuranceAmount!.toInt()} FCFA'),
+          _buildModernInfoRow(Icons.shield, 'Assurance', '${_parcel.insuranceAmount!.toInt()} FCFA'),
         if (_parcel.totalAmount != null)
-          _buildInfoTile(Icons.receipt, 'Total', _parcel.formattedTotal, isHighlighted: true),
-        const Divider(),
-        _buildInfoTile(Icons.payment, 'Mode de paiement', _getPaymentMethodLabel(_parcel.paymentMethod)),
-        _buildInfoTile(Icons.receipt, 'Statut paiement', _getPaymentStatusLabel(_parcel.paymentStatus)),
+          _buildModernInfoRow(Icons.receipt, 'Total', _parcel.formattedTotal, isHighlighted: true),
+        const Divider(height: 24),
+        _buildModernInfoRow(Icons.payment, 'Mode de paiement', _getPaymentMethodLabel(_parcel.paymentMethod)),
+        const SizedBox(height: 12),
+        _buildModernInfoRow(Icons.receipt, 'Statut paiement', _getPaymentStatusLabel(_parcel.paymentStatus)),
+      ],
+    );
+  }
+
+  Widget _buildModernInfoRow(IconData icon, String label, String value, {bool isHighlighted = false, bool isLongText = false}) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B6E3A).withAlpha(15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: const Color(0xFF0B6E3A)),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w500,
+              color: isHighlighted ? const Color(0xFF0B6E3A) : const Color(0xFF1A2B3C),
+            ),
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildPhotosContent() {
     return SizedBox(
-      height: 120,
+      height: 100,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _parcel.photoUrls.length,
@@ -899,12 +1081,25 @@ void _navigateToProfile() {
 
   Widget _buildVideosContent() {
     return SizedBox(
-      height: 120,
+      height: 100,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _parcel.videoUrls.length,
         itemBuilder: (context, index) {
           return _buildMediaThumbnail(_parcel.videoUrls[index], isVideo: true);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAudiosContent() {
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _parcel.audioUrls.length,
+        itemBuilder: (context, index) {
+          return _buildAudioTile(_parcel.audioUrls[index], index);
         },
       ),
     );
@@ -920,7 +1115,7 @@ void _navigateToProfile() {
         height: 100,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: Colors.grey[200],
+          color: Colors.grey.shade200,
           image: !isVideo && fullUrl.isNotEmpty
               ? DecorationImage(image: NetworkImage(fullUrl), fit: BoxFit.cover)
               : null,
@@ -945,42 +1140,21 @@ void _navigateToProfile() {
       return const Center(child: CircularProgressIndicator());
     }
     if (_events.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('Aucun événement disponible pour ce colis'),
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text(
+            'Aucun événement disponible',
+            style: TextStyle(color: Colors.grey),
+          ),
         ),
       );
     }
     return StatusTimeline(events: _events);
-  }
-
-  Widget _buildInfoTile(IconData icon, String label, String? value, {bool isHighlighted = false, bool isLongText = false}) {
-    if (value == null || value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: isHighlighted ? const Color(0xFF0B6E3A) : Colors.grey[500]),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 110,
-            child: Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
-                color: isHighlighted ? const Color(0xFF0B6E3A) : Colors.grey[800],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget? _buildFloatingActionButton(bool isDriver, bool isAdmin) {
@@ -988,9 +1162,11 @@ void _navigateToProfile() {
     if (_parcel.isFinished) return null;
     return FloatingActionButton.extended(
       onPressed: () => _showActionMenu(),
-      icon: const Icon(Icons.build),
+      icon: const Icon(Icons.build, size: 18),
       label: const Text('Actions'),
       backgroundColor: const Color(0xFF0B6E3A),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
     );
   }
 
@@ -1006,7 +1182,7 @@ void _navigateToProfile() {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Actions disponibles', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             ),
             const Divider(),
             if (_parcel.status == ParcelStatus.pending || _parcel.status == ParcelStatus.confirmed)
@@ -1032,7 +1208,7 @@ void _navigateToProfile() {
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: color.withAlpha(25),
-        child: Icon(icon, color: color),
+        child: Icon(icon, color: color, size: 20),
       ),
       title: Text(title),
       onTap: () {
@@ -1067,7 +1243,12 @@ void _navigateToProfile() {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color.fromARGB(255, 9, 176, 243)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0B6E3A),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             child: const Text('Confirmer'),
           ),
         ],
@@ -1145,6 +1326,7 @@ void _navigateToProfile() {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.black,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: InteractiveViewer(
           minScale: 0.5,
           maxScale: 4.0,
@@ -1159,7 +1341,7 @@ void _navigateToProfile() {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.black,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: SizedBox(
@@ -1185,18 +1367,11 @@ void _navigateToProfile() {
     if (method == null) return 'Non spécifié';
     final methodStr = method.toString();
     switch (methodStr) {
-      case 'cash':
-        return 'Espèces';
-      case 'wave':
-        return 'Wave';
-      case 'orange_money':
-        return 'Orange Money';
-      case 'free_money':
-        return 'Free Money';
-      case 'card':
-        return 'Carte bancaire';
-      default:
-        return methodStr;
+      case 'cash': return 'Espèces';
+      case 'wave': return 'Wave';
+      case 'orange_money': return 'Orange Money';
+      case 'free_money': return 'Free Money';
+      default: return methodStr;
     }
   }
 
@@ -1204,17 +1379,10 @@ void _navigateToProfile() {
     if (status == null) return 'Non spécifié';
     final statusStr = status.toString();
     switch (statusStr) {
-      case 'pending':
-        return 'En attente';
-      case 'completed':
-      case 'paid':
-        return 'Payé';
-      case 'failed':
-        return 'Échoué';
-      case 'cancelled':
-        return 'Annulé';
-      default:
-        return statusStr;
+      case 'pending': return 'En attente';
+      case 'completed': case 'paid': return 'Payé';
+      case 'failed': return 'Échoué';
+      default: return statusStr;
     }
   }
 

@@ -1,4 +1,6 @@
 // mobile/lib/screens/super-admin/parcel_form_screen.dart
+// ignore_for_file: deprecated_member_use
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';

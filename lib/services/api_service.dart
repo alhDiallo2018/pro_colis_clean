@@ -248,6 +248,7 @@ class ApiService {
       return {'success': false, 'message': e.toString()};
     }
   }
+
   // ==================== AUTHENTIFICATION AVANCÉE ====================
 
   Future<Map<String, dynamic>> refreshToken() async {
@@ -612,19 +613,19 @@ class ApiService {
     }
   }
 
-  // ✅ NOUVEAU: Upload d'un message vocal
+  // ✅ Upload d'un message vocal
   Future<String?> uploadAudio(XFile audio, String parcelId) async {
     try {
       debugPrint('🎤 Upload du message vocal pour le colis $parcelId');
       final bytes = await audio.readAsBytes();
       final base64Audio = base64Encode(bytes);
-      
+
       final response = await _dio.post('/upload/parcel-audio', data: {
         'file': base64Audio,
         'parcelId': parcelId,
         'filename': audio.name,
       });
-      
+
       final responseData = _handleResponse(response);
       if (responseData['success'] == true && responseData['url'] != null) {
         debugPrint('✅ Message vocal uploadé: ${responseData['url']}');
@@ -1820,47 +1821,97 @@ class ApiService {
 
   // ==================== NOTIFICATIONS ====================
 
-  Future<List<Map<String, dynamic>>> getNotifications() async {
+  /// Récupérer les notifications de l'utilisateur
+  Future<List<Map<String, dynamic>>> getNotifications({
+    String? type,
+    bool? isRead,
+    int limit = 50,
+    int offset = 0,
+  }) async {
     try {
-      final response = await _dio.get('/notifications');
+      final queryParams = <String, dynamic>{};
+      if (type != null) queryParams['type'] = type;
+      if (isRead != null) queryParams['isRead'] = isRead.toString();
+      queryParams['limit'] = limit;
+      queryParams['offset'] = offset;
+
+      final response = await _dio.get(
+        '/notifications',
+        queryParameters: queryParams,
+      );
       final responseData = _handleResponse(response);
-      final List<dynamic> notificationsData =
-          responseData['notifications'] ?? [];
-      return notificationsData
-          .map((json) => json as Map<String, dynamic>)
-          .toList();
+      
+      if (responseData['success'] == true) {
+        return List<Map<String, dynamic>>.from(responseData['notifications'] ?? []);
+      }
+      return [];
     } catch (e) {
       debugPrint('❌ Erreur getNotifications: $e');
       return [];
     }
   }
 
-  Future<Map<String, dynamic>> markNotificationAsRead(
-      String notificationId) async {
+  /// Récupérer le nombre de notifications non lues
+  Future<int> getUnreadNotificationsCount() async {
+    try {
+      final response = await _dio.get('/notifications/unread-count');
+      final responseData = _handleResponse(response);
+      
+      if (responseData['success'] == true) {
+        return responseData['unreadCount'] as int? ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      debugPrint('❌ Erreur getUnreadNotificationsCount: $e');
+      return 0;
+    }
+  }
+
+  /// Marquer une notification comme lue
+  Future<bool> markNotificationAsRead(String notificationId) async {
     try {
       final response = await _dio.patch('/notifications/$notificationId/read');
-      return _handleResponse(response);
+      final responseData = _handleResponse(response);
+      return responseData['success'] == true;
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      debugPrint('❌ Erreur markNotificationAsRead: $e');
+      return false;
     }
   }
 
-  Future<Map<String, dynamic>> markAllNotificationsAsRead() async {
+  /// Marquer toutes les notifications comme lues
+  Future<bool> markAllNotificationsAsRead() async {
     try {
-      final response = await _dio.patch('/notifications/read-all');
-      return _handleResponse(response);
+      final response = await _dio.post('/notifications/read-all');
+      final responseData = _handleResponse(response);
+      return responseData['success'] == true;
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      debugPrint('❌ Erreur markAllNotificationsAsRead: $e');
+      return false;
     }
   }
 
-  Future<Map<String, dynamic>> registerFcmToken(String token) async {
+  /// Supprimer une notification
+  Future<bool> deleteNotification(String notificationId) async {
     try {
-      final response =
-          await _dio.post('/notifications/fcm-token', data: {'token': token});
-      return _handleResponse(response);
+      final response = await _dio.delete('/notifications/$notificationId');
+      final responseData = _handleResponse(response);
+      return responseData['success'] == true;
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      debugPrint('❌ Erreur deleteNotification: $e');
+      return false;
+    }
+  }
+
+  /// Supprimer toutes les notifications
+  Future<bool> deleteAllNotifications() async {
+    try {
+      final response = await _dio.delete('/notifications/all');
+      final responseData = _handleResponse(response);
+      return responseData['success'] == true;
+    } catch (e) {
+      debugPrint('❌ Erreur deleteAllNotifications: $e');
+      return false;
     }
   }
 
@@ -2888,30 +2939,11 @@ class ApiService {
       if (responseData['success'] == true) {
         final List<dynamic> parcelsData = responseData['parcels'] ?? [];
         debugPrint('✅ ${parcelsData.length} colis en libre service trouvés');
-        
-        List<Parcel> parcels = [];
-        for (var parcelJson in parcelsData) {
-          final parcel = Parcel.fromJson(parcelJson as Map<String, dynamic>);
-          
-          try {
-            final bidsResponse = await _dio.get('/public/parcels/${parcel.id}/bids');
-            final bidsData = _handleResponse(bidsResponse);
-            
-            if (bidsData['success'] == true) {
-              final List<dynamic> bidsList = bidsData['bids'] ?? [];
-              final bids = bidsList
-                  .map((bidJson) => Bid.fromJson(bidJson as Map<String, dynamic>))
-                  .toList();
-              
-              parcel.bids.addAll(bids);
-            }
-          } catch (e) {
-            debugPrint('⚠️ Erreur chargement offres pour colis ${parcel.id}: $e');
-          }
-          
-          parcels.add(parcel);
-        }
-        
+
+        final parcels = parcelsData
+            .map((parcelJson) => Parcel.fromJson(parcelJson as Map<String, dynamic>))
+            .toList();
+
         return parcels;
       }
 
@@ -2927,11 +2959,63 @@ class ApiService {
       String parcelId, Map<String, dynamic> bidData) async {
     try {
       debugPrint('💰 Envoi d\'une offre pour le colis $parcelId');
-      final response = await _dio.post('/driver/bids', data: {
+      debugPrint('📤 bidData reçu: $bidData');
+
+      final data = <String, dynamic>{
         'parcelId': parcelId,
         'price': bidData['price'],
-        'message': bidData['message'],
-      });
+        'message': bidData['message'] ?? '',
+      };
+
+      if (bidData['audioUrl'] != null &&
+          bidData['audioUrl'].toString().isNotEmpty) {
+        data['audioUrl'] = bidData['audioUrl'].toString();
+        debugPrint('🎤 Audio URL ajouté à l\'offre: ${data['audioUrl']}');
+      }
+
+      if (bidData['audioFile'] != null && bidData['audioFile'] is XFile) {
+        try {
+          final audioFile = bidData['audioFile'] as XFile;
+          debugPrint('🎤 Upload du fichier audio: ${audioFile.path}');
+
+          final audioUrl = await uploadAudio(audioFile, parcelId);
+
+          if (audioUrl != null && audioUrl.isNotEmpty) {
+            data['audioUrl'] = audioUrl;
+            debugPrint('✅ Audio uploadé avec succès: $audioUrl');
+          } else {
+            debugPrint('⚠️ Échec upload audio, URL vide');
+          }
+        } catch (e) {
+          debugPrint('❌ Erreur upload audio: $e');
+        }
+      }
+
+      if (bidData['audioBase64'] != null &&
+          bidData['audioBase64'].toString().isNotEmpty) {
+        try {
+          final response = await _dio.post('/upload/parcel-audio', data: {
+            'file': bidData['audioBase64'],
+            'parcelId': parcelId,
+            'filename': 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a',
+          });
+          final responseData = _handleResponse(response);
+          if (responseData['success'] == true && responseData['url'] != null) {
+            data['audioUrl'] = responseData['url'].toString();
+            debugPrint('✅ Audio uploadé avec succès: ${data['audioUrl']}');
+          }
+        } catch (e) {
+          debugPrint('❌ Erreur upload audio base64: $e');
+        }
+      }
+
+      if (bidData['audioDuration'] != null) {
+        data['audioDuration'] = bidData['audioDuration'];
+      }
+
+      debugPrint('📤 Données finales envoyées: $data');
+
+      final response = await _dio.post('/driver/bids', data: data);
       final responseData = _handleResponse(response);
       debugPrint('✅ Offre envoyée: ${responseData['success']}');
       return responseData;
@@ -2941,11 +3025,37 @@ class ApiService {
     }
   }
 
+  /// Upload d'un audio pour une offre
+  Future<String?> uploadBidAudio(XFile audio, String parcelId) async {
+    try {
+      debugPrint('🎤 Upload du message vocal pour l\'offre du colis $parcelId');
+      final bytes = await audio.readAsBytes();
+      final base64Audio = base64Encode(bytes);
+
+      final response = await _dio.post('/upload/bid-audio', data: {
+        'file': base64Audio,
+        'parcelId': parcelId,
+        'filename': audio.name,
+      });
+
+      final responseData = _handleResponse(response);
+      if (responseData['success'] == true && responseData['url'] != null) {
+        debugPrint('✅ Message vocal uploadé: ${responseData['url']}');
+        return responseData['url'];
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ Erreur uploadBidAudio: $e');
+      return null;
+    }
+  }
+
   /// Accepter une offre (client)
   Future<Map<String, dynamic>> acceptBid(String parcelId, String bidId) async {
     try {
       debugPrint('✅ Acceptation de l\'offre $bidId pour le colis $parcelId');
-      final response = await _dio.post('/client/parcels/$parcelId/bids/$bidId/accept');
+      final response =
+          await _dio.post('/client/parcels/$parcelId/bids/$bidId/accept');
       final responseData = _handleResponse(response);
       debugPrint('✅ Offre acceptée: ${responseData['success']}');
       return responseData;
@@ -3113,6 +3223,150 @@ class ApiService {
       return [];
     }
   }
+
+  // ==================== GESTION DES POINTS (SCORE) ====================
+
+/// Récupérer le score de l'utilisateur connecté
+Future<Map<String, dynamic>> getUserScore() async {
+  try {
+    debugPrint('📊 Récupération du score utilisateur...');
+    final response = await _dio.get('/score');
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur getUserScore: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Récupérer le solde de points
+Future<Map<String, dynamic>> getBalance() async {
+  try {
+    debugPrint('💰 Récupération du solde...');
+    final response = await _dio.get('/score/balance');
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur getBalance: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Récupérer l'historique des transactions
+Future<Map<String, dynamic>> getScoreHistory({
+  int page = 1,
+  int limit = 20,
+}) async {
+  try {
+    debugPrint('📜 Récupération de l\'historique des transactions...');
+    final response = await _dio.get('/score/history', queryParameters: {
+      'page': page,
+      'limit': limit,
+    });
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur getScoreHistory: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Acheter des points
+Future<Map<String, dynamic>> purchasePoints({
+  required int amount,
+  required String paymentMethod,
+  String? paymentReference,
+}) async {
+  try {
+    debugPrint('🛒 Achat de $amount points...');
+    final response = await _dio.post('/score/purchase', data: {
+      'amount': amount,
+      'paymentMethod': paymentMethod,
+      'paymentReference': paymentReference,
+    });
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur purchasePoints: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Débiter des points (utilisation interne)
+Future<Map<String, dynamic>> debitPoints({
+  required String userId,
+  required int amount,
+  required String type,
+  required String parcelId,
+  required String description,
+}) async {
+  try {
+    debugPrint('➖ Débit de $amount points pour $userId...');
+    final response = await _dio.post('/score/debit', data: {
+      'userId': userId,
+      'amount': amount,
+      'type': type,
+      'parcelId': parcelId,
+      'description': description,
+    });
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur debitPoints: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Créditer des points (utilisation interne)
+Future<Map<String, dynamic>> creditPoints({
+  required String userId,
+  required int amount,
+  required String type,
+  required String description,
+  String? parcelId,
+}) async {
+  try {
+    debugPrint('➕ Crédit de $amount points pour $userId...');
+    final response = await _dio.post('/score/credit', data: {
+      'userId': userId,
+      'amount': amount,
+      'type': type,
+      'parcelId': parcelId,
+      'description': description,
+    });
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur creditPoints: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Obtenir les statistiques des points (Admin)
+Future<Map<String, dynamic>> getScoreStats() async {
+  try {
+    debugPrint('📊 Récupération des statistiques des points...');
+    final response = await _dio.get('/score/stats');
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur getScoreStats: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
+
+/// Rembourser une transaction (Admin)
+Future<Map<String, dynamic>> refundTransaction({
+  required String userId,
+  required String transactionId,
+  String? reason,
+}) async {
+  try {
+    debugPrint('🔄 Remboursement de la transaction $transactionId...');
+    final response = await _dio.post('/score/refund', data: {
+      'userId': userId,
+      'transactionId': transactionId,
+      'reason': reason,
+    });
+    return _handleResponse(response);
+  } catch (e) {
+    debugPrint('❌ Erreur refundTransaction: $e');
+    return {'success': false, 'message': e.toString()};
+  }
+}
 
   // ==================== WEBHOOKS ====================
 

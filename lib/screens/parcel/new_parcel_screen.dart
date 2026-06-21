@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:procolis/providers/score_provider.dart';
 import 'package:record/record.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
@@ -24,6 +25,7 @@ import '../../models/garage.dart';
 import '../../models/parcel.dart';
 import '../../models/payment.dart';
 import '../../models/user.dart';
+import '../../models/voice_message.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/parcel_provider.dart';
 import '../../services/api_service.dart';
@@ -45,8 +47,7 @@ extension PaymentMethodExtension on PaymentMethod {
       case PaymentMethod.freeMoney:
         return 'Free Money';
       case PaymentMethod.card:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+       return 'Carte bancaire';
     }
   }
 }
@@ -874,233 +875,640 @@ class _NewParcelScreenState extends ConsumerState<NewParcelScreen> {
     }
   }
 
+
+  // ==================== GESTION DES POINTS ====================
+
+/// Vérifier si l'utilisateur a assez de points pour créer un colis
+bool _hasEnoughPoints() {
+  final scoreState = ref.read(scoreProvider);
+  final score = scoreState.score;
+  
+  if (score == null) {
+    // Si le score n'est pas chargé, on le charge et on retourne false
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = ref.read(authProvider);
+      final user = authState.user;
+      if (user != null) {
+        ref.read(scoreProvider.notifier).loadScore(user.id);
+      }
+    });
+    return false;
+  }
+  
+  return score.points >= 1; // 1 point requis pour créer un colis
+}
+
+/// Afficher le dialogue de points insuffisants
+void _showInsufficientPointsDialog() {
+  final scoreState = ref.read(scoreProvider);
+  final currentPoints = scoreState.score?.points ?? 0;
+  final missingPoints = 1 - currentPoints;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          SizedBox(width: 12),
+          Text('Points insuffisants'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Vous n\'avez pas assez de points pour créer un colis.',
+            style: TextStyle(fontSize: 15),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Votre solde :'),
+                Text(
+                  '$currentPoints point${currentPoints > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0B6E3A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Points requis :'),
+                const Text(
+                  '1 point',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (missingPoints > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Points manquants :'),
+                  Text(
+                    '$missingPoints point${missingPoints > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          const Text(
+            '💡 Astuce : Vous pouvez acheter des points pour continuer.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.pop(context);
+            _showPurchasePointsDialog();
+          },
+          icon: const Icon(Icons.shopping_cart, size: 18),
+          label: const Text('Acheter des points'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0B6E3A),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Afficher le dialogue d'achat de points
+void _showPurchasePointsDialog() {
+  final TextEditingController amountController = TextEditingController();
+  const pricePerPoint = 100; // Prix en FCFA par point
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Row(
+        children: [
+          Icon(Icons.shopping_cart, color: Color(0xFF0B6E3A), size: 28),
+          SizedBox(width: 12),
+          Text('Acheter des points'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.info_outline, color: Colors.green, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '1 point = $pricePerPoint FCFA',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Nombre de points',
+              hintText: 'Ex: 10',
+              prefixIcon: const Icon(Icons.stars),
+              suffixText: 'pts',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF0B6E3A), width: 1.5),
+              ),
+            ),
+            onChanged: (value) {
+              // Mettre à jour le prix total
+            },
+          ),
+          const SizedBox(height: 16),
+          Consumer(
+            builder: (context, ref, child) {
+              final amount = int.tryParse(amountController.text) ?? 0;
+              final totalPrice = amount * pricePerPoint;
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total :',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      '${totalPrice.toStringAsFixed(0)} FCFA',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0B6E3A),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        Consumer(
+          builder: (context, ref, child) {
+            final amount = int.tryParse(amountController.text) ?? 0;
+            final isValid = amount > 0 && amount <= 1000;
+            
+            return ElevatedButton(
+              onPressed: isValid
+                  ? () {
+                      Navigator.pop(context);
+                      _purchasePoints(amount);
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0B6E3A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              ),
+              child: const Text('Acheter'),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+/// Acheter des points
+Future<void> _purchasePoints(int amount) async {
+  if (!mounted) return;
+  
+  setState(() => _isLoading = true);
+
+  try {
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+
+    if (user == null) {
+      throw Exception('Utilisateur non connecté');
+    }
+
+    final success = await ref.read(scoreProvider.notifier).creditPoints(
+      user.id,
+      amount,
+      'Achat de $amount points',
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      // Recharger le score pour mettre à jour l'affichage
+      await ref.read(scoreProvider.notifier).loadScore(user.id);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $amount points ajoutés avec succès !'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      final errorState = ref.read(scoreProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorState.error ?? 'Erreur lors de l\'achat de points'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+}
+
+/// Afficher le solde de points dans un snackbar
+void _showCurrentBalance() {
+  final scoreState = ref.read(scoreProvider);
+  final points = scoreState.score?.points ?? 0;
+  
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Row(
+        children: [
+          const Icon(Icons.stars, color: Colors.amber, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'Solde: $points point${points > 1 ? 's' : ''}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+      backgroundColor: const Color(0xFF0B6E3A),
+      duration: const Duration(seconds: 2),
+    ),
+  );
+}
+
   // ==================== CRÉATION DU COLIS ====================
 
   Future<void> _createParcel() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedDepartureGarageId == null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Veuillez sélectionner un garage de départ'),
-            backgroundColor: Colors.orange),
-      );
-      return;
+  if (_selectedDepartureGarageId == null && mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Veuillez sélectionner un garage de départ'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
+  // ✅ VÉRIFICATION DES POINTS
+  final authState = ref.read(authProvider);
+  final currentUser = authState.user;
+  final isClient = currentUser?.role == UserRole.client;
+
+  // Seul le client a besoin de points pour créer un colis
+  if (isClient) {
+    // Charger le score si nécessaire
+    final scoreState = ref.read(scoreProvider);
+    if (scoreState.score == null && currentUser != null) {
+      await ref.read(scoreProvider.notifier).loadScore(currentUser.id);
     }
 
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+    // Vérifier les points
+    if (!_hasEnoughPoints()) {
+      _showInsufficientPointsDialog();
+      return;
+    }
+  }
 
-    try {
-      final departureGarage =
-          _garages.firstWhere((g) => g.id == _selectedDepartureGarageId);
-      final arrivalGarage = _selectedArrivalGarageId != null
-          ? _garages.firstWhere((g) => g.id == _selectedArrivalGarageId)
-          : departureGarage;
+  if (!mounted) return;
+  setState(() => _isLoading = true);
 
-      final authState = ref.read(authProvider);
-      final currentUser = authState.user;
-      final isClient = currentUser?.role == UserRole.client;
+  try {
+    final departureGarage =
+        _garages.firstWhere((g) => g.id == _selectedDepartureGarageId);
+    final arrivalGarage = _selectedArrivalGarageId != null
+        ? _garages.firstWhere((g) => g.id == _selectedArrivalGarageId)
+        : departureGarage;
 
-      // 🔧 LOGIQUE MODIFIÉE: Si aucun chauffeur sélectionné et que c'est un client,
-      // le colis est automatiquement mis en libre service
-      final shouldBeFreeForBidding = isClient && _selectedDriverId == null;
-      
-      String? driverId;
-      String? driverName;
-      String? driverPhone;
+    // 🔧 LOGIQUE: Si aucun chauffeur sélectionné et que c'est un client,
+    // le colis est automatiquement mis en libre service
+    final shouldBeFreeForBidding = isClient && _selectedDriverId == null;
+    
+    String? driverId;
+    String? driverName;
+    String? driverPhone;
 
-      if (isClient && _selectedDriverId != null) {
-        final selectedDriver =
-            _availableDrivers.firstWhere((d) => d.id == _selectedDriverId);
-        driverId = selectedDriver.id;
-        driverName = selectedDriver.fullName;
-        driverPhone = selectedDriver.phone;
-      } else if (!isClient && currentUser != null) {
-        driverId = currentUser.id;
-        driverName = currentUser.fullName;
-        driverPhone = currentUser.phone;
-      }
+    if (isClient && _selectedDriverId != null) {
+      final selectedDriver =
+          _availableDrivers.firstWhere((d) => d.id == _selectedDriverId);
+      driverId = selectedDriver.id;
+      driverName = selectedDriver.fullName;
+      driverPhone = selectedDriver.phone;
+    } else if (!isClient && currentUser != null) {
+      driverId = currentUser.id;
+      driverName = currentUser.fullName;
+      driverPhone = currentUser.phone;
+    }
 
-      final parcelData = {
-        'senderName': _senderNameController.text.trim(),
-        'senderPhone': _senderPhoneController.text.trim(),
-        'receiverName': _receiverNameController.text.trim(),
-        'receiverPhone': _receiverPhoneController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'weight': double.parse(_weightController.text),
-        'type': _selectedType.value,
-        'departureGarageId': _selectedDepartureGarageId,
-        'departureGarageName': departureGarage.name,
-        'price': double.tryParse(_priceController.text) ?? 0,
-        'isUrgent': _urgentDelivery,
-        'isInsured': _insurance,
-        'paymentMethod': _selectedPaymentMethod.value,
-        'paymentPhoneNumber': _phoneNumberController.text.trim(),
-        'isFreeForBidding': shouldBeFreeForBidding,
-        'status': shouldBeFreeForBidding ? 'free' : 'pending',
-        'driverId': driverId,
-        'driverName': driverName,
-        'driverPhone': driverPhone,
-      };
+    final parcelData = {
+      'senderName': _senderNameController.text.trim(),
+      'senderPhone': _senderPhoneController.text.trim(),
+      'receiverName': _receiverNameController.text.trim(),
+      'receiverPhone': _receiverPhoneController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'weight': double.parse(_weightController.text),
+      'type': _selectedType.value,
+      'departureGarageId': _selectedDepartureGarageId,
+      'departureGarageName': departureGarage.name,
+      'price': double.tryParse(_priceController.text) ?? 0,
+      'isUrgent': _urgentDelivery,
+      'isInsured': _insurance,
+      'paymentMethod': _selectedPaymentMethod.value,
+      'paymentPhoneNumber': _phoneNumberController.text.trim(),
+      'isFreeForBidding': shouldBeFreeForBidding,
+      'status': shouldBeFreeForBidding ? 'free' : 'pending',
+      'driverId': driverId,
+      'driverName': driverName,
+      'driverPhone': driverPhone,
+    };
 
-      if (_senderEmailController.text.trim().isNotEmpty) {
-        parcelData['senderEmail'] = _senderEmailController.text.trim();
-      }
-      if (_receiverEmailController.text.trim().isNotEmpty) {
-        parcelData['receiverEmail'] = _receiverEmailController.text.trim();
-      }
-      if (_receiverAddressController.text.trim().isNotEmpty) {
-        parcelData['receiverAddress'] = _receiverAddressController.text.trim();
-      }
-      if (_selectedArrivalGarageId != null) {
-        parcelData['arrivalGarageId'] = _selectedArrivalGarageId;
-        parcelData['arrivalGarageName'] = arrivalGarage.name;
-      }
+    // Ajout des champs optionnels
+    if (_senderEmailController.text.trim().isNotEmpty) {
+      parcelData['senderEmail'] = _senderEmailController.text.trim();
+    }
+    if (_receiverEmailController.text.trim().isNotEmpty) {
+      parcelData['receiverEmail'] = _receiverEmailController.text.trim();
+    }
+    if (_receiverAddressController.text.trim().isNotEmpty) {
+      parcelData['receiverAddress'] = _receiverAddressController.text.trim();
+    }
+    if (_selectedArrivalGarageId != null) {
+      parcelData['arrivalGarageId'] = _selectedArrivalGarageId;
+      parcelData['arrivalGarageName'] = arrivalGarage.name;
+    }
 
-      debugPrint('📦 Création du colis...');
-      debugPrint('📦 Libre service: $shouldBeFreeForBidding');
-      debugPrint('📦 Chauffeur assigné: ${driverName ?? "Aucun"}');
+    debugPrint('📦 Création du colis...');
+    debugPrint('📦 Libre service: $shouldBeFreeForBidding');
+    debugPrint('📦 Chauffeur assigné: ${driverName ?? "Aucun"}');
 
-      final result =
-          await ref.read(parcelProvider.notifier).createParcel(parcelData);
+    final result =
+        await ref.read(parcelProvider.notifier).createParcel(parcelData);
 
-      if (result != null && mounted) {
-        final parcelId = result.id;
-        debugPrint('✅ Colis créé avec ID: $parcelId');
+    if (result != null && mounted) {
+      final parcelId = result.id;
+      debugPrint('✅ Colis créé avec ID: $parcelId');
 
-        final List<String> uploadedPhotoUrls = [];
-        final List<String> uploadedVideoUrls = [];
-        final List<String> uploadedAudioUrls = [];
-
-        // Upload des photos
-        if (_photos.isNotEmpty) {
-          debugPrint('📸 Upload de ${_photos.length} photo(s)...');
-          for (int i = 0; i < _photos.length; i++) {
-            final photo = _photos[i];
-            if (mounted) {
-              setState(() {
-                _compressionStatus =
-                    'Upload photo ${i + 1}/${_photos.length}...';
-                _isCompressing = true;
-              });
-            }
-
-            try {
-              final url = await _apiService.uploadParcelPhoto(photo, parcelId);
-              if (url != null && mounted) {
-                debugPrint('✅ Photo ${i + 1} uploadée');
-                uploadedPhotoUrls.add(url);
-              }
-            } catch (e) {
-              debugPrint('❌ Erreur upload photo ${i + 1}: $e');
-            }
-          }
-        }
-
-        // Upload des vidéos
-        if (_videos.isNotEmpty) {
-          debugPrint('🎬 Upload de ${_videos.length} vidéo(s)...');
-          for (int i = 0; i < _videos.length; i++) {
-            final video = _videos[i];
-            if (mounted) {
-              setState(() {
-                _compressionStatus =
-                    'Upload vidéo ${i + 1}/${_videos.length}...';
-                _isCompressing = true;
-              });
-            }
-
-            try {
-              final url = await _apiService.uploadParcelVideo(video, parcelId);
-              if (url != null && mounted) {
-                debugPrint('✅ Vidéo ${i + 1} uploadée');
-                uploadedVideoUrls.add(url);
-              }
-            } catch (e) {
-              debugPrint('❌ Erreur upload vidéo ${i + 1}: $e');
-            }
-          }
-        }
-
-        // Upload des messages vocaux
-        if (_voiceMessages.isNotEmpty) {
-          debugPrint('🎤 Upload de ${_voiceMessages.length} message(s) vocal(aux)...');
-          for (int i = 0; i < _voiceMessages.length; i++) {
-            final voiceMsg = _voiceMessages[i];
-            if (mounted) {
-              setState(() {
-                _compressionStatus = 'Upload message vocal ${i + 1}/${_voiceMessages.length}...';
-                _isCompressing = true;
-              });
-            }
-
-            try {
-              final audioFile = XFile(voiceMsg.path);
-              final url = await _apiService.uploadAudio(audioFile, parcelId);
-              if (url != null && mounted) {
-                debugPrint('✅ Message vocal ${i + 1} uploadé: $url');
-                uploadedAudioUrls.add(url);
-              }
-            } catch (e) {
-              debugPrint('❌ Erreur upload audio ${i + 1}: $e');
-            }
-          }
-        }
-
-        // Mise à jour des médias
-        if (uploadedPhotoUrls.isNotEmpty || uploadedVideoUrls.isNotEmpty || uploadedAudioUrls.isNotEmpty) {
-          try {
-            final updateData = <String, dynamic>{};
-            if (uploadedPhotoUrls.isNotEmpty) {
-              updateData['photoUrls'] = uploadedPhotoUrls;
-            }
-            if (uploadedVideoUrls.isNotEmpty) {
-              updateData['videoUrls'] = uploadedVideoUrls;
-            }
-            if (uploadedAudioUrls.isNotEmpty) {
-              updateData['audioUrls'] = uploadedAudioUrls;
-            }
-            await _apiService.updateParcelMedia(parcelId, updateData);
-            debugPrint('✅ Colis mis à jour avec succès');
-          } catch (e) {
-            debugPrint('⚠️ Erreur mise à jour médias: $e');
-          }
-        }
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _isCompressing = false;
-            _compressionStatus = '';
-          });
-          _showSuccessDialog(result);
-        }
-      } else if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isCompressing = false;
-        });
-        final errorState = ref.read(parcelProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(errorState.error ?? 'Erreur lors de la création'),
-              backgroundColor: Colors.red),
+      // ✅ DÉBIT DES POINTS POUR LE CLIENT
+      if (isClient && currentUser != null) {
+        final debited = await ref.read(scoreProvider.notifier).debitPoints(
+          currentUser.id,
+          1,
+          parcelId,
+          'Création du colis #${result.trackingNumber}',
         );
+
+        if (!debited && mounted) {
+          // Si le débit échoue, annuler le colis
+          await _apiService.cancelParcel(parcelId, reason: 'Erreur de débit de points');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erreur lors du débit des points. Colis annulé.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+        
+        // Recharger le score pour mise à jour
+        await ref.read(scoreProvider.notifier).loadScore(currentUser.id);
       }
-    } catch (e) {
-      debugPrint('❌ Erreur création colis: $e');
+
+      // Upload des médias...
+      final List<String> uploadedPhotoUrls = [];
+      final List<String> uploadedVideoUrls = [];
+      final List<String> uploadedAudioUrls = [];
+
+      // Upload des photos
+      if (_photos.isNotEmpty) {
+        debugPrint('📸 Upload de ${_photos.length} photo(s)...');
+        for (int i = 0; i < _photos.length; i++) {
+          final photo = _photos[i];
+          if (mounted) {
+            setState(() {
+              _compressionStatus = 'Upload photo ${i + 1}/${_photos.length}...';
+              _isCompressing = true;
+            });
+          }
+
+          try {
+            final url = await _apiService.uploadParcelPhoto(photo, parcelId);
+            if (url != null && mounted) {
+              debugPrint('✅ Photo ${i + 1} uploadée');
+              uploadedPhotoUrls.add(url);
+            }
+          } catch (e) {
+            debugPrint('❌ Erreur upload photo ${i + 1}: $e');
+          }
+        }
+      }
+
+      // Upload des vidéos
+      if (_videos.isNotEmpty) {
+        debugPrint('🎬 Upload de ${_videos.length} vidéo(s)...');
+        for (int i = 0; i < _videos.length; i++) {
+          final video = _videos[i];
+          if (mounted) {
+            setState(() {
+              _compressionStatus = 'Upload vidéo ${i + 1}/${_videos.length}...';
+              _isCompressing = true;
+            });
+          }
+
+          try {
+            final url = await _apiService.uploadParcelVideo(video, parcelId);
+            if (url != null && mounted) {
+              debugPrint('✅ Vidéo ${i + 1} uploadée');
+              uploadedVideoUrls.add(url);
+            }
+          } catch (e) {
+            debugPrint('❌ Erreur upload vidéo ${i + 1}: $e');
+          }
+        }
+      }
+
+      // Upload des messages vocaux
+      if (_voiceMessages.isNotEmpty) {
+        debugPrint('🎤 Upload de ${_voiceMessages.length} message(s) vocal(aux)...');
+        for (int i = 0; i < _voiceMessages.length; i++) {
+          final voiceMsg = _voiceMessages[i];
+          if (mounted) {
+            setState(() {
+              _compressionStatus = 'Upload message vocal ${i + 1}/${_voiceMessages.length}...';
+              _isCompressing = true;
+            });
+          }
+
+          try {
+            final audioFile = XFile(voiceMsg.path);
+            final url = await _apiService.uploadAudio(audioFile, parcelId);
+            if (url != null && mounted) {
+              debugPrint('✅ Message vocal ${i + 1} uploadé: $url');
+              uploadedAudioUrls.add(url);
+            }
+          } catch (e) {
+            debugPrint('❌ Erreur upload audio ${i + 1}: $e');
+          }
+        }
+      }
+
+      // Mise à jour des médias
+      if (uploadedPhotoUrls.isNotEmpty || uploadedVideoUrls.isNotEmpty || uploadedAudioUrls.isNotEmpty) {
+        try {
+          final updateData = <String, dynamic>{};
+          if (uploadedPhotoUrls.isNotEmpty) {
+            updateData['photoUrls'] = uploadedPhotoUrls;
+          }
+          if (uploadedVideoUrls.isNotEmpty) {
+            updateData['videoUrls'] = uploadedVideoUrls;
+          }
+          if (uploadedAudioUrls.isNotEmpty) {
+            updateData['audioUrls'] = uploadedAudioUrls;
+          }
+          await _apiService.updateParcelMedia(parcelId, updateData);
+          debugPrint('✅ Colis mis à jour avec succès');
+        } catch (e) {
+          debugPrint('⚠️ Erreur mise à jour médias: $e');
+        }
+      }
+
       if (mounted) {
         setState(() {
           _isLoading = false;
           _isCompressing = false;
+          _compressionStatus = '';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
-        );
+        _showSuccessDialog(result);
       }
+    } else if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _isCompressing = false;
+      });
+      final errorState = ref.read(parcelProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorState.error ?? 'Erreur lors de la création'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    debugPrint('❌ Erreur création colis: $e');
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _isCompressing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+      );
     }
   }
+}
 
   void _showSuccessDialog(Parcel parcel) {
     if (!mounted) return;
@@ -2606,15 +3014,15 @@ class _NewParcelScreenState extends ConsumerState<NewParcelScreen> {
   }
 }
 
-// Modèle pour les messages vocaux
-class VoiceMessage {
-  final String path;
-  final int duration;
-  final DateTime createdAt;
+// // Modèle pour les messages vocaux
+// class VoiceMessage {
+//   final String path;
+//   final int duration;
+//   final DateTime createdAt;
 
-  VoiceMessage({
-    required this.path,
-    required this.duration,
-    required this.createdAt,
-  });
-}
+//   VoiceMessage({
+//     required this.path,
+//     required this.duration,
+//     required this.createdAt,
+//   });
+// }

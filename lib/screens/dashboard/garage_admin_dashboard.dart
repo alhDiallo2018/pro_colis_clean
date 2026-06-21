@@ -105,7 +105,7 @@ class _GarageAdminDashboardState extends ConsumerState<GarageAdminDashboard> wit
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard Garage'),
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -159,7 +159,7 @@ class _GarageAdminDashboardState extends ConsumerState<GarageAdminDashboard> wit
             icon: const Icon(Icons.refresh),
             label: const Text('Réessayer'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0B6E3A),
+              backgroundColor: const Color.fromARGB(255, 5, 243, 243),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

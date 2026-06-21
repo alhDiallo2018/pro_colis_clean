@@ -1,6 +1,7 @@
 // mobile/lib/providers/parcel_provider.dart
 // ignore_for_file: unrelated_type_equality_checks, avoid_print
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/parcel.dart';
@@ -91,33 +92,35 @@ class ParcelNotifier extends StateNotifier<ParcelState> {
 
   // Charger les colis en libre service (marchandage)
   Future<void> loadFreeParcels() async {
-    try {
-      state = state.copyWith(isLoadingFreeParcels: true);
+  try {
+    state = state.copyWith(isLoadingFreeParcels: true);
 
-      final parcels = await _apiService.getFreeParcels();
+    final parcels = await _apiService.getFreeParcels();
 
-      // Debug - Vérifier si les offres sont bien chargées
-      for (var parcel in parcels) {
-        print('📦 Colis: ${parcel.trackingNumber}');
-        print('   Offres: ${parcel.bids.length}');
-        for (var bid in parcel.bids) {
-          print('   - ${bid.driverName}: ${bid.price} FCFA (${bid.status.label})');
-        }
+    // ✅ Les offres sont déjà incluses dans les colis
+    // Pas besoin de les recharger séparément
+
+    debugPrint('📦 ${parcels.length} colis en libre service chargés');
+    for (var parcel in parcels) {
+      debugPrint('📦 Colis: ${parcel.trackingNumber} - ${parcel.bids.length} offres');
+      for (var bid in parcel.bids) {
+        debugPrint('   - ${bid.driverName}: ${bid.price} FCFA (${bid.status.label})');
       }
-
-      state = state.copyWith(
-        freeParcels: parcels,
-        isLoadingFreeParcels: false,
-        error: null,
-      );
-    } catch (e) {
-      print('❌ Erreur loadFreeParcels: $e');
-      state = state.copyWith(
-        error: e.toString(),
-        isLoadingFreeParcels: false,
-      );
     }
+
+    state = state.copyWith(
+      freeParcels: parcels,
+      isLoadingFreeParcels: false,
+      error: null,
+    );
+  } catch (e) {
+    debugPrint('❌ Erreur loadFreeParcels: $e');
+    state = state.copyWith(
+      error: e.toString(),
+      isLoadingFreeParcels: false,
+    );
   }
+}
 
   // Faire une offre sur un colis (chauffeur)
   Future<Map<String, dynamic>> makeBid(

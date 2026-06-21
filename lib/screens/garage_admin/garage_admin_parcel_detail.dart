@@ -45,7 +45,7 @@ class _GarageAdminParcelDetailScreenState extends State<GarageAdminParcelDetailS
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.parcel.trackingNumber),
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(

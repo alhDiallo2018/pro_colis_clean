@@ -50,7 +50,7 @@ class _GarageDriversScreenState extends ConsumerState<GarageDriversScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Chauffeurs - ${widget.garage.name}'),
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         foregroundColor: Colors.white,
       ),
       body: _isLoading

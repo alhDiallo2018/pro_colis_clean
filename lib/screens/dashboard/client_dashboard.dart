@@ -1,11 +1,16 @@
-// mobile/lib/screens/dashboard/client_dashboard.dart
+// lib/screens/dashboard/client_dashboard.dart
 // ignore_for_file: prefer_const_literals_to_create_immutables, prefer_const_constructors, deprecated_member_use, unnecessary_this, unused_element
+
+import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/models/parcel.dart';
 import 'package:procolis/models/user.dart';
+import 'package:procolis/screens/dashboard/notifications/notifications_screen.dart';
+import 'package:procolis/services/api_service.dart';
+import 'package:procolis/widgets/score_display_widget.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/parcel_provider.dart';
@@ -25,17 +30,54 @@ class ClientDashboard extends ConsumerStatefulWidget {
 
 class _ClientDashboardState extends ConsumerState<ClientDashboard> {
   int _selectedIndex = 0;
+  int _unreadNotificationsCount = 0;
+  final ApiService _apiService = ApiService();
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadNotificationsCount();
+    
+    // Rafraîchir le compteur toutes les 30 secondes
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        _loadNotificationsCount();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   void _loadData() {
     Future.microtask(() {
       ref.read(parcelProvider.notifier).loadMyParcels();
     });
+  }
+
+  Future<void> _loadNotificationsCount() async {
+    try {
+      final unreadCount = await _apiService.getUnreadNotificationsCount();
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = unreadCount;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur chargement compteur notifications: $e');
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = 0;
+        });
+      }
+    }
   }
 
   @override
@@ -70,6 +112,10 @@ class _ClientDashboardState extends ConsumerState<ClientDashboard> {
               if (index == 2) {
                 _loadData();
               }
+              if (index == 4) {
+                // Rafraîchir le compteur quand on va sur les notifications
+                _loadNotificationsCount();
+              }
             },
             selectedItemColor: const Color(0xFF0B6E3A),
             unselectedItemColor: Colors.grey.shade400,
@@ -78,24 +124,57 @@ class _ClientDashboardState extends ConsumerState<ClientDashboard> {
             selectedFontSize: 12,
             unselectedFontSize: 12,
             showUnselectedLabels: true,
-            items: const [
-              BottomNavigationBarItem(
+            items: [
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.home_rounded),
                 label: 'Accueil',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.add_circle_outline_rounded),
                 label: 'Nouveau',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.search_rounded),
                 label: 'Suivi',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.track_changes),
                 label: 'Libre service',
               ),
               BottomNavigationBarItem(
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.notifications_rounded),
+                    if (_unreadNotificationsCount > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            '${_unreadNotificationsCount > 99 ? '99+' : _unreadNotificationsCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                label: 'Notifications',
+              ),
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.person_rounded),
                 label: 'Profil',
               ),
@@ -113,6 +192,8 @@ class _ClientDashboardState extends ConsumerState<ClientDashboard> {
           user: user,
           parcelState: parcelState,
           onRefresh: _loadData,
+          onNotificationsTap: _onNotificationsTap,
+          unreadNotificationsCount: _unreadNotificationsCount,
         );
       case 1:
         return const NewParcelScreen();
@@ -121,14 +202,40 @@ class _ClientDashboardState extends ConsumerState<ClientDashboard> {
       case 3:
         return const FreeParcelsScreen();
       case 4:
+        return NotificationsScreen(
+          onNotificationsRead: () {
+            // ✅ Recharger le compteur quand les notifications sont lues
+            _loadNotificationsCount();
+          },
+        );
+      case 5:
         return const ProfileScreen();
       default:
         return HomeScreen(
           user: user,
           parcelState: parcelState,
           onRefresh: _loadData,
+          onNotificationsTap: _onNotificationsTap,
+          unreadNotificationsCount: _unreadNotificationsCount,
         );
     }
+  }
+
+  void _onNotificationsTap() {
+    setState(() {
+      _selectedIndex = 4;
+    });
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          onNotificationsRead: () {
+            // ✅ Recharger le compteur quand les notifications sont lues
+            _loadNotificationsCount();
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -136,12 +243,16 @@ class HomeScreen extends StatefulWidget {
   final User? user;
   final ParcelState parcelState;
   final VoidCallback onRefresh;
+  final VoidCallback onNotificationsTap;
+  final int unreadNotificationsCount;
 
   const HomeScreen({
     super.key,
     required this.user,
     required this.parcelState,
     required this.onRefresh,
+    required this.onNotificationsTap,
+    this.unreadNotificationsCount = 0,
   });
 
   @override
@@ -152,11 +263,9 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  // Filtres
-  String _selectedFilter = 'all'; // all, pending, in_progress, delivered, free, cancelled
-  String _sortBy = 'date_desc'; // date_desc, date_asc, price_desc, price_asc
+  String _selectedFilter = 'all';
+  String _sortBy = 'date_desc';
   
-  // Audio player pour les messages vocaux
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingAudioUrl;
 
@@ -215,11 +324,9 @@ class _HomeScreenState extends State<HomeScreen>
     }).toList();
   }
 
-  // Appliquer les filtres et le tri
   List<Parcel> _filterAndSortParcels(List<Parcel> parcels) {
     List<Parcel> filtered = [...parcels];
     
-    // Application des filtres
     switch (_selectedFilter) {
       case 'pending':
         filtered = filtered.where((p) => p.isPending).toList();
@@ -240,7 +347,6 @@ class _HomeScreenState extends State<HomeScreen>
         break;
     }
     
-    // Application du tri
     switch (_sortBy) {
       case 'date_desc':
         filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -317,7 +423,6 @@ class _HomeScreenState extends State<HomeScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
         children: [
-          // Filtre par statut
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -350,7 +455,6 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           const SizedBox(width: 12),
-          // Tri
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -455,65 +559,120 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
-              if (freeWithBidsCount > 0)
-                TweenAnimationBuilder(
-                  tween: Tween<double>(begin: 0, end: 1),
-                  duration: const Duration(milliseconds: 500),
-                  builder: (context, double value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: child,
-                    );
-                  },
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const FreeParcelsScreen(),
-                      ),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFFD54F), Color(0xFFFFC107)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+              Row(
+                children: [
+                  // Widget d'affichage des points
+                  const ScoreDisplayWidget(),
+                  const SizedBox(width: 12),
+                  // Icône de notification dans le header
+                  GestureDetector(
+                    onTap: widget.onNotificationsTap,
+                    child: Stack(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: const Icon(
+                            Icons.notifications_rounded,
+                            color: Color(0xFF1A2B3C),
+                            size: 24,
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.amber.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.gavel_rounded,
-                            size: 18,
-                            color: Color(0xFF7A5C00),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '$freeWithBidsCount offre${freeWithBidsCount > 1 ? 's' : ''}',
-                            style: const TextStyle(
-                              color: Color(0xFF7A5C00),
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                        if (widget.unreadNotificationsCount > 0)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 18,
+                                minHeight: 18,
+                              ),
+                              child: Text(
+                                '${widget.unreadNotificationsCount > 99 ? '99+' : widget.unreadNotificationsCount}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
-                ),
+                  if (freeWithBidsCount > 0) ...[
+                    const SizedBox(width: 12),
+                    TweenAnimationBuilder(
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 500),
+                      builder: (context, double value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: child,
+                        );
+                      },
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const FreeParcelsScreen(),
+                          ),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFFD54F), Color(0xFFFFC107)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.gavel_rounded,
+                                size: 18,
+                                color: Color(0xFF7A5C00),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '$freeWithBidsCount offre${freeWithBidsCount > 1 ? 's' : ''}',
+                                style: const TextStyle(
+                                  color: Color(0xFF7A5C00),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
         ],

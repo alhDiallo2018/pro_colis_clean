@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/models/parcel.dart';
 import 'package:procolis/models/user.dart';
+import 'package:procolis/screens/dashboard/notifications/notifications_screen.dart';
 import 'package:procolis/screens/super-admin/garages_management_screen.dart';
 import 'package:procolis/screens/super-admin/users_management_screen.dart';
 import 'package:procolis/services/api_service.dart';
@@ -41,7 +42,6 @@ class UserNotifier extends StateNotifier<List<User>> {
   Future<void> updateUserStatus(String userId, String status) async {
     try {
       final Map<String, dynamic> result = await _apiService.updateUserStatusSuperAdmin(userId, status);
-      // Vérifier si le résultat contient l'utilisateur mis à jour
       if (result['success'] == true && result['user'] != null) {
         final updatedUser = User.fromJson(result['user']);
         final index = state.indexWhere((u) => u.id == userId);
@@ -66,19 +66,47 @@ class SuperAdminDashboard extends ConsumerStatefulWidget {
 
 class _SuperAdminDashboardState extends ConsumerState<SuperAdminDashboard> {
   int _selectedIndex = 0;
+  int _unreadNotificationsCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadNotificationsCount();
   }
 
   void _loadData() {
     Future.microtask(() {
-      // Utiliser la méthode correcte du ParcelNotifier
       ref.read(parcelProvider.notifier).loadAllParcels();
       ref.read(userProvider.notifier).loadUsers();
     });
+  }
+
+  void _loadNotificationsCount() {
+    // Simuler le chargement du nombre de notifications non lues
+    // À remplacer par un vrai appel API
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = 1; // Exemple pour super admin
+        });
+      }
+    });
+  }
+
+  void _onNotificationsTap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          onNotificationsRead: () {
+            setState(() {
+              _unreadNotificationsCount = 0;
+            });
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -96,11 +124,51 @@ class _SuperAdminDashboardState extends ConsumerState<SuperAdminDashboard> {
         onTap: (index) => setState(() => _selectedIndex = index),
         selectedItemColor: const Color(0xFF0B6E3A),
         unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Utilisateurs'),
-          BottomNavigationBarItem(icon: Icon(Icons.business), label: 'Garages'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.people),
+            label: 'Utilisateurs',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.business),
+            label: 'Garages',
+          ),
+          BottomNavigationBarItem(
+            icon: Stack(
+              children: [
+                const Icon(Icons.notifications_rounded),
+                if (_unreadNotificationsCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${_unreadNotificationsCount > 9 ? '9+' : _unreadNotificationsCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            label: 'Notifications',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profil',
+          ),
         ],
       ),
     );
@@ -114,12 +182,22 @@ class _SuperAdminDashboardState extends ConsumerState<SuperAdminDashboard> {
           parcelState: parcelState,
           users: users,
           onRefresh: _loadData,
+          onNotificationsTap: _onNotificationsTap,
+          unreadNotificationsCount: _unreadNotificationsCount,
         );
       case 1:
         return const UsersManagementScreen();
       case 2:
         return const GaragesManagementScreen();
       case 3:
+        return NotificationsScreen(
+          onNotificationsRead: () {
+            setState(() {
+              _unreadNotificationsCount = 0;
+            });
+          },
+        );
+      case 4:
         return const ProfileScreen();
       default:
         return _SuperAdminHomeScreen(
@@ -127,6 +205,8 @@ class _SuperAdminDashboardState extends ConsumerState<SuperAdminDashboard> {
           parcelState: parcelState,
           users: users,
           onRefresh: _loadData,
+          onNotificationsTap: _onNotificationsTap,
+          unreadNotificationsCount: _unreadNotificationsCount,
         );
     }
   }
@@ -137,12 +217,16 @@ class _SuperAdminHomeScreen extends StatelessWidget {
   final ParcelState parcelState;
   final List<User> users;
   final VoidCallback onRefresh;
+  final VoidCallback onNotificationsTap;
+  final int unreadNotificationsCount;
 
   const _SuperAdminHomeScreen({
     required this.user,
     required this.parcelState,
     required this.users,
     required this.onRefresh,
+    required this.onNotificationsTap,
+    this.unreadNotificationsCount = 0,
   });
 
   int get _totalParcels => parcelState.parcels.length;
@@ -185,6 +269,51 @@ class _SuperAdminHomeScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: onNotificationsTap,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withAlpha(30),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.notifications_rounded,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  if (unreadNotificationsCount > 0)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Text(
+                                          '${unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                         const Spacer(),
                         const Text(
                           'Administration',
@@ -208,6 +337,49 @@ class _SuperAdminHomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+            actions: [
+              // Icône de notification dans l'AppBar
+              GestureDetector(
+                onTap: onNotificationsTap,
+                child: Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(30),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.notifications_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    if (unreadNotificationsCount > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
           ),
           SliverPadding(
             padding: const EdgeInsets.all(16),

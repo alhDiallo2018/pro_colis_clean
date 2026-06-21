@@ -198,7 +198,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vérification OTP'),
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         foregroundColor: Colors.white,
       ),
       body: Padding(
@@ -253,7 +253,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
                 child: ElevatedButton(
                   onPressed: _verifyOtp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0B6E3A),
+                    backgroundColor: const Color.fromARGB(255, 5, 243, 243),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

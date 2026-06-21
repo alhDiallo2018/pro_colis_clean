@@ -1000,7 +1000,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ElevatedButton(
             onPressed: _isLoading ? null : _updatePin,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0B6E3A),
+              backgroundColor: const Color.fromARGB(255, 5, 243, 243),
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               minimumSize: const Size(double.infinity, 44),

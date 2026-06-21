@@ -75,7 +75,7 @@ class _AdminDashboardFullState extends ConsumerState<AdminDashboardFull> {
             SliverAppBar(
               expandedHeight: 200,
               pinned: true,
-              backgroundColor: const Color(0xFF0B6E3A),
+              backgroundColor: const Color.fromARGB(255, 5, 243, 243),
               flexibleSpace: FlexibleSpaceBar(
                 title: const Text('Tableau de bord', style: TextStyle(color: Colors.white)),
                 background: Container(
@@ -259,7 +259,7 @@ class _AdminDashboardFullState extends ConsumerState<AdminDashboardFull> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showQuickActions,
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );

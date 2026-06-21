@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:procolis/models/parcel.dart';
 import 'package:procolis/models/user.dart';
+import 'package:procolis/screens/dashboard/notifications/notifications_screen.dart';
 import 'package:procolis/services/api_service.dart';
+import 'package:procolis/widgets/score_display_widget.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/parcel_provider.dart';
@@ -23,11 +25,13 @@ class DriverDashboard extends ConsumerStatefulWidget {
 
 class _DriverDashboardState extends ConsumerState<DriverDashboard> {
   int _selectedIndex = 0;
+  int _unreadNotificationsCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadNotificationsCount();
   }
 
   void _loadData() {
@@ -35,6 +39,33 @@ class _DriverDashboardState extends ConsumerState<DriverDashboard> {
       ref.read(parcelProvider.notifier).loadDriverParcels();
       ref.read(parcelProvider.notifier).loadFreeParcels();
     });
+  }
+
+  void _loadNotificationsCount() {
+    // Simuler le chargement du nombre de notifications non lues
+    // À remplacer par un vrai appel API
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = 2; // Exemple
+        });
+      }
+    });
+  }
+
+  void _onNotificationsTap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          onNotificationsRead: () {
+            setState(() {
+              _unreadNotificationsCount = 0;
+            });
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -51,13 +82,51 @@ class _DriverDashboardState extends ConsumerState<DriverDashboard> {
         onTap: (index) => setState(() => _selectedIndex = index),
         selectedItemColor: const Color(0xFF0B6E3A),
         unselectedItemColor: Colors.grey,
-        items: const [
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.local_shipping),
+            label: 'Mes colis',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.gavel),
+            label: 'Libre service',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.add_box),
+            label: 'Envoyer',
+          ),
           BottomNavigationBarItem(
-              icon: Icon(Icons.local_shipping), label: 'Mes colis'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.gavel), label: 'Libre service'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_box), label: 'Envoyer'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+            icon: Stack(
+              children: [
+                const Icon(Icons.notifications_rounded),
+                if (_unreadNotificationsCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${_unreadNotificationsCount > 9 ? '9+' : _unreadNotificationsCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            label: 'Notifications',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profil',
+          ),
         ],
       ),
     );
@@ -67,16 +136,34 @@ class _DriverDashboardState extends ConsumerState<DriverDashboard> {
     switch (index) {
       case 0:
         return _MyParcelsScreen(
-            parcelState: parcelState, onRefresh: _loadData, user: user);
+          parcelState: parcelState,
+          onRefresh: _loadData,
+          user: user,
+          onNotificationsTap: _onNotificationsTap,
+          unreadNotificationsCount: _unreadNotificationsCount,
+        );
       case 1:
         return const FreeParcelsForDriversScreen();
       case 2:
         return const NewParcelScreen();
       case 3:
+        return NotificationsScreen(
+          onNotificationsRead: () {
+            setState(() {
+              _unreadNotificationsCount = 0;
+            });
+          },
+        );
+      case 4:
         return const ProfileScreen();
       default:
         return _MyParcelsScreen(
-            parcelState: parcelState, onRefresh: _loadData, user: user);
+          parcelState: parcelState,
+          onRefresh: _loadData,
+          user: user,
+          onNotificationsTap: _onNotificationsTap,
+          unreadNotificationsCount: _unreadNotificationsCount,
+        );
     }
   }
 }
@@ -236,7 +323,6 @@ class _DriverFreeParcelCardState extends ConsumerState<_DriverFreeParcelCard> {
     
     if (currentDriverId == null || currentDriverId.isEmpty) return false;
     
-    // Nettoyer les IDs pour la comparaison
     final cleanCurrentId = currentDriverId.trim().toLowerCase();
     
     return widget.parcel.bids.any((bid) {
@@ -306,7 +392,6 @@ class _DriverFreeParcelCardState extends ConsumerState<_DriverFreeParcelCard> {
           backgroundColor: Colors.green,
         ),
       );
-      // Recharger pour mettre à jour l'état
       ref.read(parcelProvider.notifier).loadFreeParcels();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -319,7 +404,6 @@ class _DriverFreeParcelCardState extends ConsumerState<_DriverFreeParcelCard> {
   }
 
   void _showOfferDialog() {
-    // Vérifier si une offre existe déjà
     if (_hasDriverMadeBid()) {
       final myBid = _getDriverBid();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -468,7 +552,6 @@ class _DriverFreeParcelCardState extends ConsumerState<_DriverFreeParcelCard> {
               ),
               const SizedBox(height: 12),
               
-              // Message si le chauffeur a déjà fait une offre
               if (hasMadeBid)
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -619,11 +702,15 @@ class _MyParcelsScreen extends StatefulWidget {
   final ParcelState parcelState;
   final VoidCallback onRefresh;
   final User? user;
+  final VoidCallback onNotificationsTap;
+  final int unreadNotificationsCount;
 
   const _MyParcelsScreen({
     required this.parcelState,
     required this.onRefresh,
     this.user,
+    required this.onNotificationsTap,
+    this.unreadNotificationsCount = 0,
   });
 
   @override
@@ -842,6 +929,50 @@ class _MyParcelsScreenState extends State<_MyParcelsScreen>
                           ],
                         ),
                       ),
+                      // Widget d'affichage des points
+                      const ScoreDisplayWidget(),
+                      const SizedBox(width: 12),
+                      // Icône de notification dans le header
+                      GestureDetector(
+                        onTap: widget.onNotificationsTap,
+                        child: Stack(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(30),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.notifications_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            if (widget.unreadNotificationsCount > 0)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${widget.unreadNotificationsCount > 9 ? '9+' : widget.unreadNotificationsCount}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -1055,7 +1186,6 @@ class _ParcelCardState extends State<_ParcelCard> {
     }
   }
 
-  /// Format une date avec affichage relatif
   String _formatRelativeDate(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -1325,7 +1455,6 @@ class _ParcelCardState extends State<_ParcelCard> {
                 ],
               ),
               const SizedBox(height: 8),
-              // Affichage de la date avec format relatif
               Row(
                 children: [
                   const Icon(Icons.calendar_today,
@@ -1361,9 +1490,6 @@ class _ParcelCardState extends State<_ParcelCard> {
   Widget _buildActionButtons() {
     final parcel = widget.parcel;
 
-    // Les colis en libre service ne sont pas affichés ici
-    // Ils sont dans l'onglet dédié
-    
     if (parcel.status == ParcelStatus.pending ||
         parcel.status == ParcelStatus.confirmed) {
       return _buildActionButton(

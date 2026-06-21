@@ -1,11 +1,15 @@
-// mobile/lib/models/parcel.dart
+// lib/models/parcel.dart
+
+// ignore_for_file: unused_import
 
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
 import 'payment.dart';
+import 'voice_message.dart';
 
+// ==================== ENUM PARCEL STATUS ====================
 enum ParcelStatus {
   pending('pending', 'En attente', Colors.orange),
   free('free', 'Libre service', Colors.purple),
@@ -41,6 +45,7 @@ enum ParcelStatus {
   bool get isCancelled => this == ParcelStatus.cancelled;
 }
 
+// ==================== ENUM PARCEL TYPE ====================
 enum ParcelType {
   document('document', 'Documents', Icons.description),
   package('package', 'Colis standard', Icons.inventory),
@@ -61,108 +66,7 @@ enum ParcelType {
   }
 }
 
-// ==================== CLASSE BID (OFFRE) ====================
-class Bid {
-  final String id;
-  final String driverId;
-  final String driverName;
-  final String driverPhone;
-  final double price;
-  final String? message;
-  final BidStatus status;
-  final DateTime createdAt;
-  final DateTime? respondedAt;
-  final String? responseMessage;
-
-  Bid({
-    required this.id,
-    required this.driverId,
-    required this.driverName,
-    required this.driverPhone,
-    required this.price,
-    this.message,
-    this.status = BidStatus.pending,
-    required this.createdAt,
-    this.respondedAt,
-    this.responseMessage,
-  });
-
-  factory Bid.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) {
-      if (value == null) return null;
-      if (value is DateTime) return value;
-      if (value is String) {
-        try {
-          return DateTime.parse(value);
-        } catch (e) {
-          return null;
-        }
-      }
-      return null;
-    }
-
-    return Bid(
-      id: json['id']?.toString() ?? '',
-      driverId: json['driverId']?.toString() ?? json['driver_id']?.toString() ?? '',
-      driverName: json['driverName']?.toString() ?? json['driver_name']?.toString() ?? '',
-      driverPhone: json['driverPhone']?.toString() ?? json['driver_phone']?.toString() ?? '',
-      price: (json['price'] ?? 0).toDouble(),
-      message: json['message']?.toString(),
-      status: json['status'] != null 
-          ? BidStatus.fromString(json['status'].toString()) 
-          : BidStatus.pending,
-      createdAt: parseDate(json['createdAt'] ?? json['created_at']) ?? DateTime.now(),
-      respondedAt: parseDate(json['respondedAt'] ?? json['responded_at']),
-      responseMessage: json['responseMessage']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'driverId': driverId,
-    'driverName': driverName,
-    'driverPhone': driverPhone,
-    'price': price,
-    'message': message,
-    'status': status.value,
-    'createdAt': createdAt.toIso8601String(),
-    'respondedAt': respondedAt?.toIso8601String(),
-    'responseMessage': responseMessage,
-  };
-
-  Bid copyWith({
-    String? id,
-    String? driverId,
-    String? driverName,
-    String? driverPhone,
-    double? price,
-    String? message,
-    BidStatus? status,
-    DateTime? createdAt,
-    DateTime? respondedAt,
-    String? responseMessage,
-  }) {
-    return Bid(
-      id: id ?? this.id,
-      driverId: driverId ?? this.driverId,
-      driverName: driverName ?? this.driverName,
-      driverPhone: driverPhone ?? this.driverPhone,
-      price: price ?? this.price,
-      message: message ?? this.message,
-      status: status ?? this.status,
-      createdAt: createdAt ?? this.createdAt,
-      respondedAt: respondedAt ?? this.respondedAt,
-      responseMessage: responseMessage ?? this.responseMessage,
-    );
-  }
-
-  String get formattedPrice => '${price.toStringAsFixed(0)} FCFA';
-  String get formattedDate => '${createdAt.day}/${createdAt.month}/${createdAt.hour}h${createdAt.minute}';
-  bool get isPending => status == BidStatus.pending;
-  bool get isAccepted => status == BidStatus.accepted;
-  bool get isRejected => status == BidStatus.rejected;
-}
-
+// ==================== ENUM BID STATUS ====================
 enum BidStatus {
   pending('pending', 'En attente', Colors.orange),
   accepted('accepted', 'Acceptée', Colors.green),
@@ -177,6 +81,111 @@ enum BidStatus {
     return BidStatus.values.firstWhere(
       (e) => e.value == value,
       orElse: () => BidStatus.pending,
+    );
+  }
+}
+
+// ==================== CLASSE BID (OFFRE) ====================
+class Bid {
+  final String id;
+  final String parcelId;
+  final String driverId;
+  final String driverName;
+  final String driverPhone;
+  final double price;
+  final String? message;
+  final BidStatus status;
+  final DateTime createdAt;
+  final DateTime? respondedAt;
+  final String? responseMessage;
+  final String? audioUrl; // ✅ URL du message audio du chauffeur
+
+  Bid({
+    required this.id,
+    required this.parcelId,
+    required this.driverId,
+    required this.driverName,
+    required this.driverPhone,
+    required this.price,
+    this.message,
+    this.status = BidStatus.pending,
+    required this.createdAt,
+    this.respondedAt,
+    this.responseMessage,
+    this.audioUrl,
+  });
+
+  factory Bid.fromJson(Map<String, dynamic> json) {
+    return Bid(
+      id: json['id']?.toString() ?? '',
+      parcelId: json['parcel_id']?.toString() ?? json['parcelId']?.toString() ?? '',
+      driverId: json['driverId']?.toString() ?? json['driver_id']?.toString() ?? '',
+      driverName: json['driverName']?.toString() ?? json['driver_name']?.toString() ?? '',
+      driverPhone: json['driverPhone']?.toString() ?? json['driver_phone']?.toString() ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
+      message: json['message']?.toString(),
+      status: json['status'] != null ? BidStatus.fromString(json['status'].toString()) : BidStatus.pending,
+      createdAt: json['createdAt'] != null 
+          ? DateTime.parse(json['createdAt'].toString())
+          : (json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now()),
+      respondedAt: json['respondedAt'] != null 
+          ? DateTime.parse(json['respondedAt'].toString())
+          : (json['responded_at'] != null ? DateTime.parse(json['responded_at'].toString()) : null),
+      responseMessage: json['responseMessage']?.toString() ?? json['response_message']?.toString(),
+      audioUrl: json['audioUrl']?.toString() ?? json['audio_url']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'parcel_id': parcelId,
+    'driver_id': driverId,
+    'driver_name': driverName,
+    'driver_phone': driverPhone,
+    'price': price,
+    'message': message,
+    'status': status.value,
+    'created_at': createdAt.toIso8601String(),
+    'responded_at': respondedAt?.toIso8601String(),
+    'response_message': responseMessage,
+    'audio_url': audioUrl,
+  };
+
+  // Propriétés calculées
+  String get formattedPrice => '${price.toStringAsFixed(0)} FCFA';
+  String get formattedDate => '${createdAt.day}/${createdAt.month} à ${createdAt.hour}h${createdAt.minute}';
+  bool get isPending => status == BidStatus.pending;
+  bool get isAccepted => status == BidStatus.accepted;
+  bool get isRejected => status == BidStatus.rejected;
+  bool get hasAudio => audioUrl != null && audioUrl!.isNotEmpty;
+
+  Bid copyWith({
+    String? id,
+    String? parcelId,
+    String? driverId,
+    String? driverName,
+    String? driverPhone,
+    double? price,
+    String? message,
+    BidStatus? status,
+    DateTime? createdAt,
+    DateTime? respondedAt,
+    String? responseMessage,
+    String? audioUrl,
+  }) {
+    return Bid(
+      id: id ?? this.id,
+      parcelId: parcelId ?? this.parcelId,
+      driverId: driverId ?? this.driverId,
+      driverName: driverName ?? this.driverName,
+      driverPhone: driverPhone ?? this.driverPhone,
+      price: price ?? this.price,
+      message: message ?? this.message,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      respondedAt: respondedAt ?? this.respondedAt,
+      responseMessage: responseMessage ?? this.responseMessage,
+      audioUrl: audioUrl ?? this.audioUrl,
     );
   }
 }
@@ -242,7 +251,7 @@ class Parcel {
   // Médias
   final List<String> photoUrls;
   final List<String> videoUrls;
-  final List<String> audioUrls;  // ✅ AJOUTÉ: Messages vocaux
+  final List<String> audioUrls;  // ✅ Messages vocaux du colis
   final String? signatureUrl;
   
   // Notes
@@ -309,7 +318,7 @@ class Parcel {
     this.paymentStatus,
     this.photoUrls = const [],
     this.videoUrls = const [],
-    this.audioUrls = const [],  // ✅ AJOUTÉ
+    this.audioUrls = const [],  // ✅ 
     this.signatureUrl,
     this.notes,
     this.pickupDate,
@@ -426,7 +435,7 @@ class Parcel {
       paymentStatus: parseString(json['paymentStatus']),
       photoUrls: parseList(json['photoUrls']),
       videoUrls: parseList(json['videoUrls']),
-      audioUrls: parseList(json['audioUrls']),  // ✅ AJOUTÉ
+      audioUrls: parseList(json['audioUrls']),  // ✅ 
       signatureUrl: parseString(json['signatureUrl']),
       notes: parseString(json['notes']),
       pickupDate: parseDateTime(json['pickupDate']),
@@ -485,7 +494,7 @@ class Parcel {
     'paymentStatus': paymentStatus,
     'photoUrls': photoUrls,
     'videoUrls': videoUrls,
-    'audioUrls': audioUrls,  // ✅ AJOUTÉ
+    'audioUrls': audioUrls,  // ✅ 
     'signatureUrl': signatureUrl,
     'notes': notes,
     'pickupDate': pickupDate?.toIso8601String(),

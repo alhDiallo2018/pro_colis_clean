@@ -145,7 +145,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEditing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'),
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         foregroundColor: Colors.white,
       ),
       body: Form(

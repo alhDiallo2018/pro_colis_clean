@@ -777,7 +777,7 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> {
               child: ElevatedButton(
                 onPressed: _viewFullDetails,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0B6E3A),
+                  backgroundColor: const Color.fromARGB(255, 5, 243, 243),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),

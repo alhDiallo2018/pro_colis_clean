@@ -120,7 +120,7 @@ class _AdminStatsScreenState extends ConsumerState<AdminStatsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tableau de bord'),
-        backgroundColor: const Color(0xFF0B6E3A),
+        backgroundColor: const Color.fromARGB(255, 5, 243, 243),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

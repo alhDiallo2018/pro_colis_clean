@@ -1,20 +1,30 @@
 // lib/screens/parcel/free_parcels_screen.dart
-// ignore_for_file: prefer_const_constructors, unused_import, unused_element
+// ignore_for_file: prefer_const_constructors, unused_import, unused_element, prefer_const_literals_to_create_immutables, use_build_context_synchronously, unnecessary_string_interpolations
+
+import 'dart:async';
+import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:procolis/models/user.dart';
-import 'package:procolis/providers/auth_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../models/parcel.dart';
+import '../../models/user.dart';
+import '../../models/voice_message.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/parcel_provider.dart';
+import '../../services/api_service.dart';
 import 'new_parcel_screen.dart';
 import 'parcel_detail_screen.dart';
 
+// ==================== ÉCRAN PRINCIPAL ====================
 class FreeParcelsScreen extends ConsumerStatefulWidget {
   const FreeParcelsScreen({super.key});
 
@@ -23,8 +33,8 @@ class FreeParcelsScreen extends ConsumerStatefulWidget {
 }
 
 class _FreeParcelsScreenState extends ConsumerState<FreeParcelsScreen> {
-  String _filter = 'all'; // all, pending, accepted, rejected
-  String _sortBy = 'price_desc'; // price_desc, price_asc, date_desc, date_asc
+  String _filter = 'all';
+  String _sortBy = 'price_desc';
 
   @override
   void initState() {
@@ -41,7 +51,6 @@ class _FreeParcelsScreenState extends ConsumerState<FreeParcelsScreen> {
   List<Parcel> _getFilteredAndSortedParcels(List<Parcel> parcels) {
     List<Parcel> filtered = [...parcels];
     
-    // Filtrage
     switch (_filter) {
       case 'pending':
         filtered = filtered.where((p) => p.bids.isEmpty).toList();
@@ -56,7 +65,6 @@ class _FreeParcelsScreenState extends ConsumerState<FreeParcelsScreen> {
         break;
     }
     
-    // Tri
     switch (_sortBy) {
       case 'price_desc':
         filtered.sort((a, b) => (b.proposedPrice ?? 0).compareTo(a.proposedPrice ?? 0));
@@ -103,7 +111,6 @@ class _FreeParcelsScreenState extends ConsumerState<FreeParcelsScreen> {
       ),
       body: Column(
         children: [
-          // Barre de filtres et tri
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
@@ -122,11 +129,11 @@ class _FreeParcelsScreenState extends ConsumerState<FreeParcelsScreen> {
                         isExpanded: true,
                         icon: Icon(Icons.filter_list, size: 18, color: Colors.grey.shade600),
                         style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                        items: [
-                          const DropdownMenuItem(value: 'all', child: Text('📦 Tous')),
-                          const DropdownMenuItem(value: 'pending', child: Text('⏳ Sans offres')),
-                          const DropdownMenuItem(value: 'accepted', child: Text('✅ Acceptés')),
-                          const DropdownMenuItem(value: 'rejected', child: Text('❌ Sans réponse')),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('📦 Tous')),
+                          DropdownMenuItem(value: 'pending', child: Text('⏳ Sans offres')),
+                          DropdownMenuItem(value: 'accepted', child: Text('✅ Acceptés')),
+                          DropdownMenuItem(value: 'rejected', child: Text('❌ Sans réponse')),
                         ],
                         onChanged: (value) {
                           setState(() => _filter = value!);
@@ -149,11 +156,11 @@ class _FreeParcelsScreenState extends ConsumerState<FreeParcelsScreen> {
                         isExpanded: true,
                         icon: Icon(Icons.sort, size: 18, color: Colors.grey.shade600),
                         style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                        items: [
-                          const DropdownMenuItem(value: 'price_desc', child: Text('💰 Prix décroissant')),
-                          const DropdownMenuItem(value: 'price_asc', child: Text('💰 Prix croissant')),
-                          const DropdownMenuItem(value: 'date_desc', child: Text('📅 Plus récent')),
-                          const DropdownMenuItem(value: 'date_asc', child: Text('📅 Plus ancien')),
+                        items: const [
+                          DropdownMenuItem(value: 'price_desc', child: Text('💰 Prix décroissant')),
+                          DropdownMenuItem(value: 'price_asc', child: Text('💰 Prix croissant')),
+                          DropdownMenuItem(value: 'date_desc', child: Text('📅 Plus récent')),
+                          DropdownMenuItem(value: 'date_asc', child: Text('📅 Plus ancien')),
                         ],
                         onChanged: (value) {
                           setState(() => _sortBy = value!);
@@ -341,99 +348,21 @@ class _FreeParcelCard extends StatelessWidget {
     }
   }
 
-  void _showMakeBidDialog(BuildContext context) {
+  void _showMakeBidWithAudioDialog(BuildContext context) {
     final priceController = TextEditingController();
     final messageController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Faire une offre'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: priceController,
-              decoration: const InputDecoration(
-                labelText: 'Prix proposé (FCFA)',
-                prefixIcon: Icon(Icons.attach_money),
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: messageController,
-              decoration: const InputDecoration(
-                labelText: 'Message (optionnel)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annuler'),
-          ),
-          Consumer(
-            builder: (context, ref, child) {
-              final authState = ref.watch(authProvider);
-              final currentDriverId = authState.user?.id ?? '';
-              final driverName = authState.user?.fullName ?? '';
-              final driverPhone = authState.user?.phone ?? '';
-              
-              return ElevatedButton(
-                onPressed: () async {
-                  final price = double.tryParse(priceController.text);
-                  if (price == null || price <= 0) {
-                    if (dialogContext.mounted) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(content: Text('Veuillez entrer un prix valide')),
-                      );
-                    }
-                    return;
-                  }
-
-                  final bidData = {
-                    'price': price,
-                    'message': messageController.text,
-                    'driverId': currentDriverId,
-                    'driverName': driverName,
-                    'driverPhone': driverPhone,
-                  };
-
-                  final result = await ref.read(parcelProvider.notifier).makeBid(
-                    parcel.id,
-                    bidData,
-                  );
-
-                  if (dialogContext.mounted) {
-                    if (result['success'] == true) {
-                      Navigator.pop(dialogContext);
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(content: Text('Offre envoyée avec succès !')),
-                      );
-                      ref.read(parcelProvider.notifier).loadFreeParcels();
-                    } else {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        SnackBar(content: Text(result['message'] ?? "Erreur lors de l'envoi de l'offre")),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0B6E3A),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text('Envoyer'),
-              );
-            },
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (dialogContext) => _MakeBidWithAudioDialog(
+        parcelId: parcel.id,
+        priceController: priceController,
+        messageController: messageController,
+        onSuccess: () {
+          final ref = ProviderScope.containerOf(context);
+          ref.read(parcelProvider.notifier).loadFreeParcels();
+        },
       ),
     );
   }
@@ -442,6 +371,7 @@ class _FreeParcelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPhotos = parcel.photoUrls.isNotEmpty;
     final hasVideos = parcel.videoUrls.isNotEmpty;
+    final hasAudio = parcel.audioUrls.isNotEmpty;
     final hasMadeBid = _hasDriverMadeBid();
     final myBid = _getDriverBid();
 
@@ -474,7 +404,6 @@ class _FreeParcelCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Aperçu des médias
                 if (hasPhotos || hasVideos)
                   ClipRRect(
                     borderRadius: const BorderRadius.only(
@@ -517,6 +446,29 @@ class _FreeParcelCard extends StatelessWidget {
                                 ),
                               ),
                             ),
+                          if (hasAudio)
+                            Positioned(
+                              bottom: 8,
+                              right: hasVideos ? 60 : 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.mic, size: 14, color: Colors.white),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${parcel.audioUrls.length}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           if (hasPhotos && parcel.photoUrls.length > 1)
                             Positioned(
                               bottom: 8,
@@ -540,6 +492,29 @@ class _FreeParcelCard extends StatelessWidget {
                                 ),
                               ),
                             ),
+                          if (hasAudio && !hasVideos && !hasPhotos)
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.mic, size: 14, color: Colors.white),
+                                    const SizedBox(width: 4),
+                                    const Text(
+                                      'Audio',
+                                      style: TextStyle(color: Colors.white, fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -549,7 +524,6 @@ class _FreeParcelCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // En-tête avec badges
                       Row(
                         children: [
                           Container(
@@ -595,7 +569,6 @@ class _FreeParcelCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      // Message si offre déjà envoyée
                       if (isDriver && hasMadeBid)
                         Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -623,7 +596,6 @@ class _FreeParcelCard extends StatelessWidget {
                           ),
                         ),
 
-                      // Numéro de suivi
                       Text(
                         parcel.trackingNumber,
                         style: const TextStyle(
@@ -635,7 +607,6 @@ class _FreeParcelCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
 
-                      // Itinéraire
                       Row(
                         children: [
                           Icon(Icons.circle, size: 10, color: Colors.green),
@@ -676,7 +647,6 @@ class _FreeParcelCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      // Description et poids
                       Row(
                         children: [
                           Icon(Icons.description, size: 14, color: Colors.grey[500]),
@@ -700,7 +670,6 @@ class _FreeParcelCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      // Prix suggéré
                       if (parcel.proposedPrice != null)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -731,7 +700,6 @@ class _FreeParcelCard extends StatelessWidget {
             ),
           ),
 
-          // Bouton d'action
           if (isDriver)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -753,11 +721,11 @@ class _FreeParcelCard extends StatelessWidget {
                         ),
                       )
                     : ElevatedButton.icon(
-                        onPressed: () => _showMakeBidDialog(context),
+                        onPressed: () => _showMakeBidWithAudioDialog(context),
                         icon: const Icon(Icons.attach_money, size: 18),
                         label: const Text('Faire une offre'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0B6E3A),
+                          backgroundColor: const Color.fromARGB(255, 5, 243, 243),
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -765,6 +733,569 @@ class _FreeParcelCard extends StatelessWidget {
                       ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== DIALOGUE OFFRE AVEC AUDIO ====================
+class _MakeBidWithAudioDialog extends StatefulWidget {
+  final String parcelId;
+  final TextEditingController priceController;
+  final TextEditingController messageController;
+  final VoidCallback onSuccess;
+
+  const _MakeBidWithAudioDialog({
+    required this.parcelId,
+    required this.priceController,
+    required this.messageController,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_MakeBidWithAudioDialog> createState() => _MakeBidWithAudioDialogState();
+}
+
+class _MakeBidWithAudioDialogState extends State<_MakeBidWithAudioDialog> {
+  final _audioRecorder = Record();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final ApiService _apiService = ApiService();
+  final List<VoiceMessage> _voiceMessages = [];
+  bool _isRecording = false;
+  Timer? _recordingTimer;
+  int _recordingDuration = 0;
+  String? _currentlyPlayingPath;
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions();
+  }
+
+  @override
+  void dispose() {
+    _recordingTimer?.cancel();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
+    for (final msg in _voiceMessages) {
+      try {
+        final file = File(msg.path);
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+      } catch (_) {}
+    }
+    super.dispose();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Permission.microphone.request();
+  }
+
+  Future<String?> _getVoiceMessagePath() async {
+    if (kIsWeb) return '';
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      return '${directory.path}/voice_bid_$timestamp.m4a';
+    } catch (e) {
+      debugPrint('Erreur chemin audio: $e');
+      return null;
+    }
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      final isRecording = await _audioRecorder.isRecording();
+      if (isRecording) return;
+
+      final hasPermission = await _audioRecorder.hasPermission();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permission microphone refusée'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final path = await _getVoiceMessagePath();
+      if (path == null) {
+        throw Exception('Impossible de créer le fichier audio');
+      }
+
+      setState(() {
+        _isRecording = true;
+        _recordingDuration = 0;
+      });
+
+      _recordingTimer?.cancel();
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (mounted) {
+          setState(() {
+            _recordingDuration++;
+          });
+        }
+      });
+
+      if (kIsWeb) {
+        await _audioRecorder.start(
+          path: '',
+          encoder: AudioEncoder.aacLc,
+          samplingRate: 44100,
+        );
+      } else {
+        await _audioRecorder.start(
+          path: path,
+          encoder: AudioEncoder.aacLc,
+          samplingRate: 44100,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur lors de l\'enregistrement: $e');
+      _recordingTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'enregistrement : $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final isRecording = await _audioRecorder.isRecording();
+      if (isRecording) {
+        _recordingTimer?.cancel();
+        final path = await _audioRecorder.stop();
+
+        if (path != null && mounted) {
+          final voiceMessage = VoiceMessage(
+            path: path,
+            duration: _recordingDuration,
+            createdAt: DateTime.now(),
+          );
+          setState(() {
+            _voiceMessages.add(voiceMessage);
+            _isRecording = false;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Message vocal enregistré (${_formatDuration(_recordingDuration)})',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          setState(() {
+            _isRecording = false;
+          });
+        }
+      } else {
+        setState(() {
+          _isRecording = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur lors de l\'arrêt: $e');
+      setState(() {
+        _isRecording = false;
+      });
+    }
+  }
+
+  Future<void> _playVoiceMessage(String path) async {
+    try {
+      if (_currentlyPlayingPath == path) {
+        await _audioPlayer.stop();
+        setState(() {
+          _currentlyPlayingPath = null;
+        });
+      } else {
+        await _audioPlayer.stop();
+        await _audioPlayer.play(DeviceFileSource(path));
+        setState(() {
+          _currentlyPlayingPath = path;
+        });
+
+        _audioPlayer.onPlayerComplete.listen((event) {
+          if (mounted) {
+            setState(() {
+              _currentlyPlayingPath = null;
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur lors de la lecture: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la lecture: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeVoiceMessage(int index) {
+    final voiceMessage = _voiceMessages[index];
+    try {
+      final file = File(voiceMessage.path);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (e) {
+      debugPrint('Erreur suppression fichier audio: $e');
+    }
+    setState(() {
+      _voiceMessages.removeAt(index);
+    });
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDateTime(DateTime date) {
+    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Faire une offre',
+          style: TextStyle(fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextFormField(
+              controller: widget.priceController,
+              decoration: const InputDecoration(
+                labelText: '💰 Prix proposé (FCFA)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: widget.messageController,
+              decoration: const InputDecoration(
+                labelText: '✏️ Message (optionnel)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.mic, color: Colors.red.shade400),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Message vocal (optionnel)',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        const Spacer(),
+                        if (_voiceMessages.isNotEmpty)
+                          Text(
+                            '${_voiceMessages.length} message(s)',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (_voiceMessages.isNotEmpty)
+                    ..._voiceMessages.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final voiceMsg = entry.value;
+                      return _buildVoiceMessageTile(voiceMsg, index);
+                    }),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _isRecording
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Enregistrement... ${_formatDuration(_recordingDuration)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation(Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ElevatedButton.icon(
+                                  onPressed: _startRecording,
+                                  icon: const Icon(Icons.mic, size: 20),
+                                  label: const Text('Enregistrer un message vocal'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red.shade400,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        if (_isRecording) const SizedBox(width: 12),
+                        if (_isRecording)
+                          ElevatedButton(
+                            onPressed: _stopRecording,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Arrêter'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isRecording || _isProcessing ? null : () {
+            for (final msg in _voiceMessages) {
+              try {
+                final file = File(msg.path);
+                if (file.existsSync()) {
+                  file.deleteSync();
+                }
+              } catch (_) {}
+            }
+            Navigator.pop(context);
+          },
+          child: const Text('Annuler'),
+        ),
+        Consumer(
+          builder: (context, ref, child) {
+            final authState = ref.watch(authProvider);
+            final currentDriverId = authState.user?.id ?? '';
+            final driverName = authState.user?.fullName ?? '';
+            final driverPhone = authState.user?.phone ?? '';
+
+            return ElevatedButton(
+              onPressed: _isRecording || _isProcessing
+                  ? null
+                  : () async {
+                      final price = double.tryParse(widget.priceController.text);
+                      if (price == null || price <= 0) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Veuillez entrer un prix valide')),
+                          );
+                        }
+                        return;
+                      }
+
+                      setState(() => _isProcessing = true);
+
+                      final bidData = {
+                        'price': price,
+                        'message': widget.messageController.text,
+                        'driverId': currentDriverId,
+                        'driverName': driverName,
+                        'driverPhone': driverPhone,
+                      };
+
+                      // ✅ AJOUT: Log pour déboguer
+                      debugPrint('🎤 Vérification audio avant upload:');
+                      debugPrint('   - voiceMessages: ${_voiceMessages.length}');
+                      if (_voiceMessages.isNotEmpty) {
+                        debugPrint('   - path: ${_voiceMessages.last.path}');
+                        debugPrint('   - duration: ${_voiceMessages.last.duration}');
+                      }
+
+                      if (_voiceMessages.isNotEmpty && !kIsWeb) {
+                        try {
+                          final voiceMessage = _voiceMessages.last;
+                          final audioFile = XFile(voiceMessage.path);
+                          
+                          debugPrint('🎤 Upload du fichier audio: ${audioFile.path}');
+                          
+                          final audioUrl = await _apiService.uploadAudio(audioFile, widget.parcelId);
+                          
+                          if (audioUrl != null && audioUrl.isNotEmpty) {
+                            bidData['audioUrl'] = audioUrl;
+                            bidData['audioDuration'] = voiceMessage.duration;
+                            debugPrint('✅ Audio uploadé avec succès: $audioUrl');
+                          } else {
+                            debugPrint('⚠️ Audio uploadé mais URL vide');
+                          }
+                        } catch (e) {
+                          debugPrint('❌ Erreur upload audio: $e');
+                          // Continuer sans audio
+                        }
+                      }
+
+                      debugPrint('📤 bidData final avant envoi: $bidData');
+
+                      final result = await ref
+                          .read(parcelProvider.notifier)
+                          .makeBid(widget.parcelId, bidData);
+
+                      setState(() => _isProcessing = false);
+
+                      if (mounted) {
+                        if (result['success'] == true) {
+                          for (final msg in _voiceMessages) {
+                            try {
+                              final file = File(msg.path);
+                              if (file.existsSync()) {
+                                file.deleteSync();
+                              }
+                            } catch (_) {}
+                          }
+                          Navigator.pop(context);
+                          widget.onSuccess();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Offre envoyée avec succès ! 🎉'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(result['message'] ??
+                                  "Erreur lors de l'envoi de l'offre"),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 5, 243, 243),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+              ),
+              child: _isProcessing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : const Text('Envoyer l\'offre'),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVoiceMessageTile(VoiceMessage message, int index) {
+    final isPlaying = _currentlyPlayingPath == message.path;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              isPlaying ? Icons.stop : Icons.play_arrow,
+              color: Colors.blue.shade600,
+            ),
+            onPressed: () => _playVoiceMessage(message.path),
+            iconSize: 20,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Message vocal ${_formatDuration(message.duration)}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                Text(
+                  '${_formatDateTime(message.createdAt)}',
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => _removeVoiceMessage(index),
+            color: Colors.grey.shade600,
+          ),
         ],
       ),
     );
@@ -789,6 +1320,17 @@ class _FreeParcelDetailsScreenState
   String? _currentlyPlayingAudioUrl;
   final Map<String, VideoPlayerController> _videoControllers = {};
   final Map<String, bool> _videoInitialized = {};
+  final Map<String, bool> _audioPlaying = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions();
+    for (int i = 0; i < widget.parcel.videoUrls.length; i++) {
+      final url = widget.parcel.videoUrls[i];
+      _initializeVideoController(url, 'video_$i');
+    }
+  }
 
   @override
   void dispose() {
@@ -797,6 +1339,10 @@ class _FreeParcelDetailsScreenState
     }
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Permission.microphone.request();
   }
 
   void _initializeVideoController(String url, String id) async {
@@ -828,11 +1374,26 @@ class _FreeParcelDetailsScreenState
     try {
       if (_currentlyPlayingAudioUrl == audioUrl) {
         await _audioPlayer.stop();
-        setState(() => _currentlyPlayingAudioUrl = null);
+        setState(() {
+          _currentlyPlayingAudioUrl = null;
+          _audioPlaying[audioUrl] = false;
+        });
       } else {
         await _audioPlayer.stop();
         await _audioPlayer.play(UrlSource(audioUrl));
-        setState(() => _currentlyPlayingAudioUrl = audioUrl);
+        setState(() {
+          _currentlyPlayingAudioUrl = audioUrl;
+          _audioPlaying[audioUrl] = true;
+        });
+
+        _audioPlayer.onPlayerComplete.listen((event) {
+          if (mounted) {
+            setState(() {
+              _currentlyPlayingAudioUrl = null;
+              _audioPlaying[audioUrl] = false;
+            });
+          }
+        });
       }
     } catch (e) {
       debugPrint('Erreur lecture audio: $e');
@@ -916,16 +1477,233 @@ class _FreeParcelDetailsScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildMediaSection(parcel),
+                  const SizedBox(height: 16),
                   _buildMainCard(parcel),
                   const SizedBox(height: 16),
                   _buildInfoCard(parcel),
                   const SizedBox(height: 16),
                   _buildReceiverCard(parcel),
                   const SizedBox(height: 16),
+                  _buildSenderCard(parcel),
+                  const SizedBox(height: 16),
+                  if (parcel.proposedPrice != null)
+                    _buildSuggestedPriceCard(parcel),
+                  const SizedBox(height: 16),
                   _buildBidsSection(parcel, isDriver, currentDriverId),
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildMediaSection(Parcel parcel) {
+    final hasPhotos = parcel.photoUrls.isNotEmpty;
+    final hasVideos = parcel.videoUrls.isNotEmpty;
+    final hasAudio = parcel.audioUrls.isNotEmpty;
+
+    if (!hasPhotos && !hasVideos && !hasAudio) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_not_supported, color: Colors.grey[400]),
+            const SizedBox(width: 8),
+            Text(
+              'Aucun média disponible',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '📎 Médias',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          if (hasPhotos) ...[
+            const Text(
+              '📸 Photos',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 120,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: parcel.photoUrls.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    width: 120,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      image: DecorationImage(
+                        image: CachedNetworkImageProvider(parcel.photoUrls[index]),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (hasVideos) ...[
+            const Text(
+              '🎬 Vidéos',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 150,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: parcel.videoUrls.length,
+                itemBuilder: (context, index) {
+                  final id = 'video_$index';
+                  final isInitialized = _videoInitialized[id] ?? false;
+                  final controller = _videoControllers[id];
+                  return Container(
+                    width: 200,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.black,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          if (!kIsWeb && isInitialized && controller != null)
+                            VideoPlayer(controller)
+                          else
+                            const Center(
+                              child: Icon(Icons.videocam, size: 40, color: Colors.white54),
+                            ),
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: Icon(
+                                controller != null && controller.value.isPlaying
+                                    ? Icons.pause
+                                    : Icons.play_arrow,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                              onPressed: () {
+                                if (controller != null) {
+                                  if (controller.value.isPlaying) {
+                                    controller.pause();
+                                  } else {
+                                    controller.play();
+                                  }
+                                  setState(() {});
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (hasAudio) ...[
+            const Text(
+              '🎤 Messages audio',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            ...parcel.audioUrls.asMap().entries.map((entry) {
+              final index = entry.key;
+              final audioUrl = entry.value;
+              final isPlaying = _currentlyPlayingAudioUrl == audioUrl;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isPlaying ? Colors.purple.shade50 : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isPlaying ? Colors.purple : Colors.grey.shade300,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        isPlaying ? Icons.stop : Icons.play_arrow,
+                        color: Colors.purple[700],
+                        size: 28,
+                      ),
+                      onPressed: () => _playAudio(audioUrl),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Message audio ${index + 1}',
+                            style: TextStyle(
+                              fontWeight: isPlaying ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (isPlaying)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              height: 2,
+                              width: double.infinity,
+                              color: Colors.purple,
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (isPlaying)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.purple),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
     );
   }
 
@@ -992,7 +1770,7 @@ class _FreeParcelDetailsScreenState
 
   Widget _buildInfoCard(Parcel parcel) {
     return _buildCard(
-      title: 'Informations',
+      title: 'Informations détaillées',
       icon: Icons.info_outline,
       child: Column(
         children: [
@@ -1002,14 +1780,16 @@ class _FreeParcelDetailsScreenState
           const SizedBox(height: 12),
           _buildInfoRow(Icons.category, 'Type', parcel.type.label),
           const SizedBox(height: 12),
+          _buildInfoRow(Icons.payment, 'Paiement', parcel.paymentMethod?.label ?? 'Non spécifié'),
+          if (parcel.paymentPhoneNumber != null && parcel.paymentPhoneNumber!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.phone, 'Tél. paiement', parcel.paymentPhoneNumber!),
+          ],
+          const SizedBox(height: 12),
           _buildInfoRow(Icons.departure_board, 'Départ', parcel.departureGarageName),
           if (parcel.arrivalGarageName != null) ...[
             const SizedBox(height: 12),
             _buildInfoRow(Icons.location_on, 'Arrivée', parcel.arrivalGarageName!),
-          ],
-          if (parcel.proposedPrice != null) ...[
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.attach_money, 'Prix suggéré', parcel.formattedProposedPrice, isHighlighted: true),
           ],
           const SizedBox(height: 12),
           _buildInfoRow(Icons.calendar_today, 'Création', parcel.formattedDateTime),
@@ -1017,14 +1797,63 @@ class _FreeParcelDetailsScreenState
             const SizedBox(height: 12),
             _buildInfoRow(Icons.note, 'Notes', parcel.notes!, isLongText: true),
           ],
+          if (parcel.isUrgent) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.flash_on, 'Urgent', 'Oui', isHighlighted: true),
+          ],
+          if (parcel.isInsured) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.shield, 'Assuré', 'Oui', isHighlighted: true),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestedPriceCard(Parcel parcel) {
+    return _buildCard(
+      title: '💰 Prix suggéré',
+      icon: Icons.attach_money,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.amber.shade50, Colors.amber.shade100],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.attach_money, size: 32, color: Colors.amber[700]),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${parcel.proposedPrice?.toStringAsFixed(0)} FCFA',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.amber[800],
+                  ),
+                ),
+                Text(
+                  'Prix suggéré par l\'expéditeur',
+                  style: TextStyle(fontSize: 12, color: Colors.amber[600]),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildReceiverCard(Parcel parcel) {
     return _buildCard(
-      title: 'Destinataire',
+      title: '👤 Destinataire',
       icon: Icons.person,
       child: Column(
         children: [
@@ -1038,6 +1867,24 @@ class _FreeParcelDetailsScreenState
           if (parcel.receiverAddress != null && parcel.receiverAddress!.isNotEmpty) ...[
             const SizedBox(height: 12),
             _buildInfoRow(Icons.location_on, 'Adresse', parcel.receiverAddress!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSenderCard(Parcel parcel) {
+    return _buildCard(
+      title: '📦 Expéditeur',
+      icon: Icons.person_outline,
+      child: Column(
+        children: [
+          _buildInfoRow(Icons.person, 'Nom', parcel.senderName),
+          const SizedBox(height: 12),
+          _buildInfoRow(Icons.phone, 'Téléphone', parcel.senderPhone),
+          if (parcel.senderEmail != null && parcel.senderEmail!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.email, 'Email', parcel.senderEmail!),
           ],
         ],
       ),
@@ -1059,43 +1906,76 @@ class _FreeParcelDetailsScreenState
       filteredBids = parcel.bids;
     }
     
-    if (filteredBids.isEmpty) {
-      return _buildCard(
-        title: isDriver ? 'Votre offre' : 'Offres',
-        icon: Icons.gavel,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Icon(Icons.hourglass_empty, size: 48, color: Colors.orange[300]),
-              const SizedBox(height: 12),
-              Text(
-                isDriver ? 'Vous n\'avez pas encore fait d\'offre' : 'Aucune offre pour le moment',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isDriver ? 'Faites une offre pour être mis en relation' : 'Soyez patient, des offres arrivent',
-                style: TextStyle(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return _buildCard(
       title: isDriver ? 'Votre offre' : 'Offres des chauffeurs',
       icon: Icons.gavel,
       child: Column(
-        children: filteredBids.map((bid) => _BidCard(
-          bid: bid,
-          onAccept: () => _acceptBid(bid),
-          onReject: () => _rejectBid(bid),
-          isProcessing: _isProcessing,
-          isDriverBid: isDriver && bid.driverId == currentDriverId,
-        )).toList(),
+        children: [
+          if (isDriver && parcel.bids.every((bid) => bid.driverId != currentDriverId))
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final priceController = TextEditingController();
+                  final messageController = TextEditingController();
+                  showDialog(
+                    context: context,
+                    builder: (dialogContext) => _MakeBidWithAudioDialog(
+                      parcelId: parcel.id,
+                      priceController: priceController,
+                      messageController: messageController,
+                      onSuccess: () {
+                        ref.read(parcelProvider.notifier).loadFreeParcels();
+                      },
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.attach_money),
+                label: const Text('Faire une offre'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(255, 5, 243, 243),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          if (filteredBids.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(Icons.hourglass_empty, size: 48, color: Colors.orange[300]),
+                  const SizedBox(height: 12),
+                  Text(
+                    isDriver ? 'Vous n\'avez pas encore fait d\'offre' : 'Aucune offre pour le moment',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isDriver ? 'Faites une offre pour être mis en relation' : 'Soyez patient, des offres arrivent',
+                    style: TextStyle(color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else
+            ...filteredBids.map((bid) => _BidCard(
+              bid: bid,
+              onAccept: () => _acceptBid(bid),
+              onReject: () => _rejectBid(bid),
+              isProcessing: _isProcessing,
+              isDriverBid: isDriver && bid.driverId == currentDriverId,
+              onPlayAudio: bid.audioUrl != null && bid.audioUrl!.isNotEmpty
+                  ? () => _playAudio(bid.audioUrl!)
+                  : null,
+              isAudioPlaying: bid.audioUrl != null && _currentlyPlayingAudioUrl == bid.audioUrl,
+            )),
+        ],
       ),
     );
   }
@@ -1177,13 +2057,15 @@ class _FreeParcelDetailsScreenState
   }
 }
 
-// ==================== CARTE OFFRE ====================
+// ==================== CARTE OFFRE AVEC AUDIO ====================
 class _BidCard extends StatelessWidget {
   final Bid bid;
   final VoidCallback onAccept;
   final VoidCallback onReject;
   final bool isProcessing;
   final bool isDriverBid;
+  final VoidCallback? onPlayAudio;
+  final bool isAudioPlaying;
 
   const _BidCard({
     required this.bid,
@@ -1191,6 +2073,8 @@ class _BidCard extends StatelessWidget {
     required this.onReject,
     this.isProcessing = false,
     this.isDriverBid = false,
+    this.onPlayAudio,
+    this.isAudioPlaying = false,
   });
 
   String _formatDate(DateTime date) {
@@ -1202,6 +2086,7 @@ class _BidCard extends StatelessWidget {
     final isAccepted = bid.status == BidStatus.accepted;
     final isRejected = bid.status == BidStatus.rejected;
     final isPending = bid.status == BidStatus.pending;
+    final hasAudio = bid.audioUrl != null && bid.audioUrl!.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1297,6 +2182,64 @@ class _BidCard extends StatelessWidget {
               child: Text(bid.message!, style: TextStyle(color: Colors.grey[700])),
             ),
           ],
+          // ==================== SECTION AUDIO DE L'OFFRE ====================
+          if (hasAudio && onPlayAudio != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isAudioPlaying ? Colors.purple.shade50 : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isAudioPlaying ? Colors.purple : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      isAudioPlaying ? Icons.stop : Icons.play_arrow,
+                      color: Colors.purple[700],
+                      size: 24,
+                    ),
+                    onPressed: onPlayAudio,
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '🎤 Message vocal du chauffeur',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isAudioPlaying ? FontWeight.bold : FontWeight.w500,
+                            color: Colors.purple[700],
+                          ),
+                        ),
+                        if (isAudioPlaying)
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            height: 2,
+                            width: 60,
+                            color: Colors.purple,
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (isAudioPlaying)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.purple),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          // ==================== FIN SECTION AUDIO ====================
           if (!isAccepted && !isRejected && !isProcessing && !isDriverBid) ...[
             const SizedBox(height: 12),
             Row(
@@ -1320,7 +2263,7 @@ class _BidCard extends StatelessWidget {
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Accepter'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0B6E3A),
+                      backgroundColor: const Color.fromARGB(255, 5, 243, 243),
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),

@@ -566,7 +566,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
           ),
         ],
       ),
-      backgroundColor: const Color(0xFF0B6E3A),
+      backgroundColor: const Color.fromARGB(255, 5, 243, 243),
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: false,
@@ -650,7 +650,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
             icon: const Icon(Icons.refresh),
             label: const Text('Réessayer'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0B6E3A),
+              backgroundColor: const Color.fromARGB(255, 5, 243, 243),
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1164,7 +1164,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
       onPressed: () => _showActionMenu(),
       icon: const Icon(Icons.build, size: 18),
       label: const Text('Actions'),
-      backgroundColor: const Color(0xFF0B6E3A),
+      backgroundColor: const Color.fromARGB(255, 5, 243, 243),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
     );
@@ -1244,7 +1244,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0B6E3A),
+              backgroundColor: const Color.fromARGB(255, 5, 243, 243),
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

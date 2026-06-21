@@ -37,7 +37,7 @@ class DashboardScreen extends ConsumerWidget {
       case UserRole.admin:
         return const GarageAdminDashboard();
       case UserRole.superAdmin:
-        return  const SuperAdminDashboard();
+        return const SuperAdminDashboard();
       default:
         return const ClientDashboard();
     }
